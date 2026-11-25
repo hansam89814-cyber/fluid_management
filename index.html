@@ -35,6 +35,10 @@ textarea{min-height:56px;resize:vertical}
 #cam video{width:100%;display:block;height:34vh;object-fit:cover}
 #cam .aim{position:absolute;left:8%;right:8%;top:30%;bottom:30%;border:3px solid #ffd54a;border-radius:8px;pointer-events:none;transition:border-color .15s}
 #cam.hit .aim{border-color:#4ade80}
+#cam.band .aim{left:4%;right:4%;top:34%;bottom:34%;border-color:#ffb020;border-width:4px}
+.grid3{grid-template-columns:repeat(3,minmax(0,1fr))!important}
+.grid3 input{min-width:0;max-width:100%;width:100%}
+input[type=date]{-webkit-appearance:none;appearance:none;min-height:42px;background:#fff}
 #cam .close{position:absolute;right:8px;top:8px;background:rgba(0,0,0,.6);color:#fff;border:0}
 #cam .live{position:absolute;left:8px;bottom:8px;right:8px;background:rgba(0,0,0,.65);color:#fff;border-radius:8px;padding:6px 10px;font-size:15px}
 #msg{margin:8px 0 0;font-size:15px;color:var(--mute);min-height:1.5em}
@@ -168,6 +172,7 @@ textarea{min-height:56px;resize:vertical}
           <div><label for="rb_exp">유통기한</label><input id="rb_exp" type="date"></div>
         </div>
         <div class="hint">글씨로 읽은 값은 틀릴 수 있어요. 확인하고 고친 뒤 추가해 주세요.</div>
+        <button type="button" class="small main" id="rbApply" hidden style="width:100%;margin-top:8px"></button>
         <div class="btnrow"><button type="button" class="small main" id="rbBox">📦 박스 +1로 추가</button><button type="button" class="small main" id="rbEa">🧴 낱개 +1로 추가</button><button type="button" class="small" id="rbCancel">취소</button></div>
         <details style="margin-top:8px"><summary class="hint" style="cursor:pointer">읽은 글씨 그대로 보기</summary><pre id="rbText" style="white-space:pre-wrap;font-size:12px;background:#f1f3f5;padding:8px;border-radius:8px;max-height:140px;overflow:auto"></pre></details>
       </div>
@@ -492,6 +497,13 @@ function placeMatch(p, q) {
 const findProd = name => CATALOG.find(p => p.n === String(name || '').trim());
 
 let products = load(PKEY, {});
+const PRESET = {   // 사진에서 확인한 박스 바코드 (첫 숫자 1·8 = 박스)
+  '18806789009949': '위너프페리 502ml', '18806449018229': '중외 0.45%염화나트륨주사액 1000ml',
+  '18806789002315': '중외 엔에스주사액 1000ml', '88806400010728': '엔에스주사액 100ml',
+  '88806400026118': '플라즈마 1000ml', '18806451003619': '관류용 멸균증류수 1000ml',
+  '18806451002520': '5%포도당가생리식염액 1000ml'
+};
+Object.keys(PRESET).forEach(k => { if (!products[k]) products[k] = PRESET[k] });
 let deliveries = load(DKEY, null);
 if (!deliveries) {   // 예전 버전 기록 옮기기
   deliveries = load(OLDKEY, []).map(r => ({ id: r.id, time: r.time, place: r.place, who: r.who, memo: r.memo,
@@ -747,6 +759,7 @@ $('cart').addEventListener('change', e => {
 /* ---------- 카메라 연속 스캔 ---------- */
 let stream = null, timer = null, zreader = null, lastCode = '', lastSeen = 0;
 function seen(code) {   // 같은 상자를 계속 비추고 있으면 한 번만 셈
+  if (textMode || readBusy) return;
   const now = Date.now();
   if (code === lastCode && now - lastSeen < 1200) { lastSeen = now; return }
   lastCode = code; lastSeen = now;
@@ -761,7 +774,7 @@ async function startScan() {
   try {
     if ('BarcodeDetector' in window) {
       const det = new BarcodeDetector();
-      stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment', width: { ideal: 1280 } } });
+      stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment', width: { ideal: 1920 }, height: { ideal: 1080 } } });
       video.srcObject = stream; await video.play();
       const tick = async () => {
         if (!stream) return;
@@ -771,8 +784,8 @@ async function startScan() {
       tick();
     } else if (window.ZXing) {
       const hints = new Map(); hints.set(ZXing.DecodeHintType.TRY_HARDER, true);
-      zreader = new ZXing.BrowserMultiFormatReader(hints, 150);
-      await zreader.decodeFromConstraints({ video: { facingMode: 'environment' } }, video, res => { if (res) seen(res.getText()) });
+      zreader = new ZXing.BrowserMultiFormatReader(zxHints(), 150);
+      await zreader.decodeFromConstraints({ video: { facingMode: 'environment', width: { ideal: 1920 }, height: { ideal: 1080 } } }, video, res => { if (res) seen(res.getText()) });
     } else throw new Error('noreader');
     $('btnScan').textContent = '📷 찍는 중…';
   } catch (e) {
@@ -781,6 +794,7 @@ async function startScan() {
   }
 }
 function stopScan() {
+  setTextMode(false);
   clearTimeout(timer);
   if (zreader) { try { zreader.reset() } catch (e) {} zreader = null }
   if (stream) { stream.getTracks().forEach(t => t.stop()); stream = null }
@@ -842,7 +856,8 @@ function ocrDates(text) {
   return out;
 }
 function ocrLot(text, dates) {
-  const ok = x => /[A-Z]/.test(x) && /\d/.test(x) && !/ML|EA|KG|BTL|X\d/.test(x) && x.length >= 5 && x.length <= 12;
+  const ok = x => x.length >= 5 && x.length <= 10 && !/ML|EA|KG|BTL/.test(x) &&
+    (/^[A-Z]{1,4}\d{2,}[A-Z0-9]{0,4}$/.test(x) || /^\d{2,4}[A-Z]{1,3}\d{2,}$/.test(x));   // 제조번호 모양: PS126K4, CKR26006, NS36G48, 190FP60
   // '제조번호:' / 'Lot' 바로 뒤 (띄어 찍힌 글자도 붙여서)
   for (const m of text.matchAll(/(?:제조번호|lot\.?\s*(?:no\.?)?|batch)\s*[:：.]?\s*((?:[A-Z0-9]\s?){4,14})/gi)) {
     const first = m[1].trim().split(/\s+/)[0].toUpperCase();
@@ -885,14 +900,54 @@ function loadTess(onProg) {
   tessP.catch(() => { tessP = null });
   return tessP;
 }
+let tessEngP = null;
+function loadTessEng() {   // 제조번호·날짜 줄 전용 (영문·숫자만)
+  if (!tessEngP) tessEngP = loadTess().then(() => Tesseract.createWorker('eng')).then(async w => {
+    await w.setParameters({ tessedit_char_whitelist: 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789.:-() ', preserve_interword_spaces: '1', tessedit_pageseg_mode: '7' });
+    return w;
+  });
+  tessEngP.catch(() => { tessEngP = null });
+  return tessEngP;
+}
+function tsvLines(tsv) {   // 글씨 위치 → 줄 단위로 묶기
+  const map = new Map();
+  String(tsv || '').split('\n').forEach(r => {
+    const c = r.split('\t'); if (c.length < 12 || c[0] !== '5' || !c[11].trim()) return;
+    const k = c[2] + '-' + c[3] + '-' + c[4], L = +c[6], T = +c[7], W = +c[8], H = +c[9];
+    const o = map.get(k) || { text: '', x0: 1e9, y0: 1e9, x1: 0, y1: 0 };
+    o.text += (o.text ? ' ' : '') + c[11]; o.x0 = Math.min(o.x0, L); o.y0 = Math.min(o.y0, T); o.x1 = Math.max(o.x1, L + W); o.y1 = Math.max(o.y1, T + H);
+    map.set(k, o);
+  });
+  return [...map.values()];
+}
+function cropFor(full, x0, y0, x1, y1, targetH) {   // 원본에서 한 줄만 잘라 크게
+  x0 = Math.max(0, x0); y0 = Math.max(0, y0); x1 = Math.min(full.width, x1); y1 = Math.min(full.height, y1);
+  const w = x1 - x0, h = y1 - y0; if (w < 8 || h < 8) return null;
+  const k = Math.min(3, Math.max(.3, targetH / h));
+  const t = document.createElement('canvas'); t.width = Math.round(w * k); t.height = Math.round(h * k);
+  t.getContext('2d').drawImage(full, x0, y0, w, h, 0, 0, t.width, t.height);
+  return ocrCanvas(t);
+}
+async function readLines(full, small, lines) {   // 제조번호·날짜가 있을 만한 줄만 다시 읽기
+  const f = full.width / small.width, out = [];
+  const want = lines.filter(l => /제조|번호|사용|기한|유효|lot|exp|\d{4}\s*[.,\-]\s*\d{1,2}|[A-Z]{2,}\s?\d{2,}|\d{2,}[A-Z]{2}/i.test(l.text)).slice(0, 8);
+  if (!want.length) return '';
+  const w = await loadTessEng();
+  for (const l of want) {
+    const h = l.y1 - l.y0;
+    const c = cropFor(full, (l.x0 - h) * f, (l.y0 - h * .45) * f, (l.x1 + h * 8) * f, (l.y1 + h * .45) * f, 70);
+    if (!c) continue;
+    try { const r = await w.recognize(c); out.push(((r && r.data && r.data.text) || '').trim()) } catch (e) {}
+  }
+  return out.join('\n');
+}
 async function toCanvas(src) {   // 사진 파일·카메라 화면 → 알맞은 크기의 그림
   let w, h, img;
   if (src instanceof HTMLVideoElement) { img = src; w = src.videoWidth; h = src.videoHeight }
   else { img = await createImageBitmap(src); w = img.width; h = img.height }
-  const k = Math.min(1, 1800 / Math.max(w, h));
-  const c = document.createElement('canvas'); c.width = Math.round(w * k); c.height = Math.round(h * k);
-  c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
-  return c;
+  const mk = cap => { const k = Math.min(1, cap / Math.max(w, h)); const c = document.createElement('canvas'); c.width = Math.round(w * k); c.height = Math.round(h * k); c.getContext('2d').drawImage(img, 0, 0, c.width, c.height); return c };
+  const small = mk(1800); small.full = mk(3200);   // 작은 그림(글씨 찾기용) + 큰 그림(바코드·제조번호 줄용)
+  return small;
 }
 function ocrCanvas(c) {   // 흑백 + 대비 높이기
   const o = document.createElement('canvas'); o.width = c.width; o.height = c.height;
@@ -905,18 +960,26 @@ function ocrCanvas(c) {   // 흑백 + 대비 높이기
   x.putImageData(im, 0, 0);
   return o;
 }
-async function findBarcodes(c) {   // 사진 한 장에서 바코드 여러 개 찾기
-  const found = new Set();
+function zxHints() {
+  const hints = new Map(); hints.set(ZXing.DecodeHintType.TRY_HARDER, true);
+  const F = ZXing.BarcodeFormat;
+  hints.set(ZXing.DecodeHintType.POSSIBLE_FORMATS, [F.DATA_MATRIX, F.CODE_128, F.EAN_13, F.ITF, F.QR_CODE].filter(x => x != null));
+  return hints;
+}
+async function findBarcodes(c0, onProg) {   // 사진 한 장에서 바코드 여러 개 찾기 (원본 크기로 조각조각)
+  const c = c0.full || c0, found = new Set();
   try { if ('BarcodeDetector' in window) (await new BarcodeDetector().detect(c)).forEach(r => found.add(r.rawValue)) } catch (e) {}
-  if (window.ZXing) {
-    const hints = new Map(); hints.set(ZXing.DecodeHintType.TRY_HARDER, true);
-    const rd = new ZXing.BrowserMultiFormatReader(hints);
-    const tiles = [[0, 0, 1, 1]];   // 전체 + 겹치는 조각들
-    for (const [fx, fy] of [[0, 0], [.5, 0], [0, .5], [.5, .5], [.25, .25]]) tiles.push([fx, fy, .5, .5]);
-    for (const [fx, fy] of [[0, .33], [0, 0], [0, .66]]) tiles.push([fx, fy, 1, .34]);
-    for (const [fx, fy, fw, fh] of tiles) {
+  if (window.ZXing && ![...found].some(v => /^(\]d2)?01\d{14}/.test(v) || /\(01\)/.test(v))) {
+    const rd = new ZXing.BrowserMultiFormatReader(zxHints());
+    const tiles = [[0, 0, 1, 1]];   // 전체 + 겹치는 조각들 (가로세로 3칸, 반씩 겹치게)
+    for (let gy = 0; gy < 5; gy++) for (let gx = 0; gx < 5; gx++) tiles.push([gx * .2, gy * .2, .4, .4]);
+    for (let i = 0; i < tiles.length; i++) {
+      const [fx, fy, fw, fh] = tiles[i];
+      if (fx + fw > 1.001 || fy + fh > 1.001) continue;
+      if ([...found].some(v => classify(v).type === 'gs1')) break;   // 네모 바코드를 찾으면 그만
+      onProg && onProg(i, tiles.length);
       try {
-        const t = document.createElement('canvas'); const w = c.width * fw, h = c.height * fh, k = Math.min(2, 900 / Math.max(w, h));
+        const t = document.createElement('canvas'); const w = c.width * fw, h = c.height * fh, k = Math.min(2, 1400 / Math.max(w, h));
         t.width = Math.round(w * k); t.height = Math.round(h * k);
         t.getContext('2d').drawImage(c, c.width * fx, c.height * fy, w, h, 0, 0, t.width, t.height);
         const res = await rd.decodeFromImageUrl(t.toDataURL('image/png'));
@@ -935,36 +998,77 @@ async function readImage(src) {
   rbShow('사진에서 바코드를 찾는 중…'); $('readBox').scrollIntoView({ behavior: 'smooth', block: 'center' });
   let c;
   try { c = await toCanvas(src) } catch (e) { readBusy = false; rbShow(''); $('rbSrc').textContent = '사진을 열지 못했어요'; return }
-  const codes = (await findBarcodes(c)).map(classify).filter(x => x.type !== 'other').sort((a, b) => RANK[b.type] - RANK[a.type]);
+  const codes = (await findBarcodes(c, (i, n) => { $('rbWait').textContent = `바코드 찾는 중… ${i + 1}/${n}` })).map(classify).filter(x => x.type !== 'other').sort((a, b) => RANK[b.type] - RANK[a.type]);
   const main = codes.find(x => x.code) || null, lotBar = codes.find(x => x.type === 'lot');
   rbCode = main ? main.code : ''; rbSerial = main && main.serial || '';
   const pk = rbCode ? prodOf(rbCode) : null;
   const fromBar = { name: pk ? pk.name : '', lot: (main && main.lot) || (lotBar && lotBar.lot) || '', exp: main && main.exp || '', mfg: main && main.mfg || '' };
-  // 글씨 읽기
-  let text = '', ocr = { name: '', lot: '', exp: '', mfg: '' }, ocrFail = false;
-  rbShow('글씨를 읽는 중… (처음 한 번은 글자 사전을 받느라 30초~1분 걸려요)');
-  try {
-    const w = await loadTess(m => { if (m.status && m.progress != null) $('rbWait').textContent = (m.status.includes('recogniz') ? '글씨 읽는 중… ' : '글자 사전 준비 중… ') + Math.round(m.progress * 100) + '%' });
-    const r = await w.recognize(ocrCanvas(c));
-    text = (r && r.data && r.data.text) || '';
-    ocr = parseOcr(text);
-  } catch (e) { ocrFail = true }
+  // 글씨 읽기 — 네모 바코드로 다 읽혔으면 건너뛰기
+  let text = '', lineText = '', ocr = { name: '', lot: '', exp: '', mfg: '' }, ocrFail = false;
+  const need = !(fromBar.name && fromBar.lot && fromBar.exp);
+  if (need) {
+    rbShow('글씨를 읽는 중… (처음 한 번은 글자 사전을 받느라 30초~1분 걸려요)');
+    try {
+      const w = await loadTess(m => { if (m.status && m.progress != null) $('rbWait').textContent = (m.status.includes('recogniz') ? '글씨 읽는 중… ' : '글자 사전 준비 중… ') + Math.round(m.progress * 100) + '%' });
+      const r = await w.recognize(ocrCanvas(c), {}, { text: true, tsv: true });
+      text = (r && r.data && r.data.text) || '';
+      ocr = parseOcr(text);
+      if (!(fromBar.lot && fromBar.exp)) {
+        $('rbWait').textContent = '제조번호·사용기한 줄을 크게 다시 읽는 중…';
+        lineText = await readLines(c.full, c, tsvLines(r && r.data && r.data.tsv));
+        if (lineText) { const o2 = parseOcr(lineText); ['lot', 'exp', 'mfg', 'code', 'serial'].forEach(k => { if (o2[k]) ocr[k] = o2[k] }) }
+      }
+    } catch (e) { ocrFail = true }
+  }
   if (!rbCode && ocr.code) { rbCode = ocr.code; rbSerial = ocr.serial || '' }   // 상자에 글씨로 찍힌 (01) 번호
   if (rbCode && !fromBar.name) { const pk2 = prodOf(rbCode); if (pk2) fromBar.name = pk2.name }
   const pick = (k) => fromBar[k] || ocr[k] || '';
   const srcOf = k => fromBar[k] ? '바코드' : ocr[k] ? '글씨' : '';
   $('rb_name').value = pick('name'); $('rb_lot').value = pick('lot'); $('rb_exp').value = pick('exp'); $('rb_mfg').value = pick('mfg');
   const known = rbCode && prodOf(rbCode);
-  const found = [main ? `바코드 ✓${main.type === 'gs1' ? '(네모)' : ''}${known ? '' : ' (처음 보는 바코드)'}` : rbCode ? '바코드 ✗ (글씨로 번호 읽음)' : '바코드 ✗', ocrFail ? '글씨 ✗ (인터넷 확인)' : text.trim() ? '글씨 ✓' : '글씨 ✗'];
+  const found = [main ? `바코드 ✓${main.type === 'gs1' ? '(네모)' : ''}${known ? '' : ' (처음 보는 바코드)'}` : rbCode ? '바코드 ✗ (글씨로 번호 읽음)' : '바코드 ✗',
+    !need ? '글씨 읽기 생략' : ocrFail ? '글씨 ✗ (인터넷 확인)' : text.trim() ? '글씨 ✓' : '글씨 ✗'];
   const from = ['name', 'lot', 'exp'].map(k => srcOf(k) && `${{ name: '제품', lot: '제조번호', exp: '유통기한' }[k]}←${srcOf(k)}`).filter(Boolean);
   $('rbSrc').textContent = found.join(' · ') + (from.length ? ' | ' + from.join(', ') : '');
-  $('rbText').textContent = text.trim() || '(읽은 글씨 없음)';
+  $('rbText').textContent = (lineText ? '[제조번호·날짜 줄]\n' + lineText + '\n\n' : '') + (text.trim() || '(읽은 글씨 없음)');
   const guessEa = pk ? pk.ea : (rbCode ? rbCode[0] === '0' : false);
   $('rbEa').classList.toggle('main', guessEa); $('rbBox').classList.toggle('main', !guessEa);
   rbShow('');
   readBusy = false;
-  if (!rbCode && !text.trim()) say('바코드도 글씨도 찾지 못했어요. 가까이에서 흔들리지 않게 다시 찍어 주세요.', 'bad');
-  else say('읽은 결과를 확인하고 "추가"를 눌러 주세요.', 'good');
+  if (!rbCode && !text.trim()) say('바코드도 글씨도 찾지 못했어요. 상자 하나만 가까이에서 흔들리지 않게 다시 찍어 주세요.', 'bad');
+  else say('읽은 결과를 확인하고 "추가"를 눌러 주세요. 상자 하나만 가까이 찍을수록 정확해요.', 'good');
+}
+/* 카메라 화면에서 '제조번호·사용기한' 두 줄만 읽기 */
+let textMode = false;
+function setTextMode(on) {
+  textMode = on;
+  $('cam').classList.toggle('band', on);
+  $('btnSnap').textContent = on ? '📸 지금 읽기' : '📝 글씨 읽기';
+  $('live').textContent = on ? '제조번호·사용기한 두 줄을 노란 칸에 맞추고 📸를 누르세요' : '상자 바코드를 차례로 비춰 주세요';
+}
+async function readBand() {
+  const v = $('video'); if (!v.videoWidth || readBusy) return;
+  readBusy = true;
+  const W = v.videoWidth, H = v.videoHeight;
+  const full = document.createElement('canvas'); full.width = W; full.height = H; full.getContext('2d').drawImage(v, 0, 0);
+  setTextMode(false);
+  rbShow('글씨 읽는 중…'); $('readBox').scrollIntoView({ behavior: 'smooth', block: 'center' });
+  let t1 = '';
+  try {
+    const w = await loadTessEng();
+    const band = cropFor(full, W * .04, H * .34, W * .96, H * .66, 160);
+    await w.setParameters({ tessedit_pageseg_mode: '6' });
+    const r = await w.recognize(band); t1 = ((r && r.data && r.data.text) || '').trim();
+    await w.setParameters({ tessedit_pageseg_mode: '7' });
+  } catch (e) { readBusy = false; rbShow(''); $('rbSrc').textContent = '글씨 ✗ (인터넷 확인)'; return }
+  const o = parseOcr(t1), last = cart.items.find(x => x.k === lastItemK) || cart.items[0];
+  rbCode = ''; rbSerial = '';
+  $('rb_name').value = last ? last.name : ''; $('rb_lot').value = o.lot; $('rb_exp').value = o.exp; $('rb_mfg').value = o.mfg;
+  $('rbSrc').textContent = `글씨(제조번호 줄) ${o.lot || o.exp ? '✓' : '✗'}`;
+  $('rbText').textContent = t1 || '(읽은 글씨 없음)';
+  $('rbApply').hidden = !last; $('rbApply').textContent = last ? `✅ "${last.name || '방금 줄'}" 줄에 넣기` : '';
+  rbShow(''); readBusy = false;
+  say(o.lot || o.exp ? '읽은 제조번호·사용기한을 확인해 주세요.' : '못 읽었어요. 두 줄이 노란 칸 가운데 오게, 조금 더 가까이 맞춰 다시 해 주세요.', o.lot || o.exp ? 'good' : 'bad');
 }
 function addItem(v, isEa) {   // 읽은 결과로 줄 추가
   if (v.serial && cart.items.some(x => (x.serials || []).includes(v.code + '/' + v.serial))) { say('이미 찍은 상자예요 (같은 일련번호).', 'bad'); return false }
@@ -989,9 +1093,16 @@ function rbAdd(isEa) {
   const v = { code: rbCode, serial: rbSerial, name: $('rb_name').value.trim(), lot: $('rb_lot').value.trim().toUpperCase(), exp: $('rb_exp').value, mfg: $('rb_mfg').value };
   if (addItem(v, isEa)) { $('readBox').hidden = true; rbCode = '' }
 }
-$('rbBox').onclick = () => rbAdd(false);
+$('rbBox').onclick = () => { $('rbApply').hidden = true; rbAdd(false) };
 $('rbEa').onclick = () => rbAdd(true);
-$('rbCancel').onclick = () => { $('readBox').hidden = true; rbCode = ''; say('취소했어요.') };
+$('rbCancel').onclick = () => { $('readBox').hidden = true; $('rbApply').hidden = true; rbCode = ''; say('취소했어요.') };
+$('rbApply').onclick = () => {   // 읽은 제조번호·사용기한을 방금 줄에 넣기 (개수는 그대로)
+  const it = cart.items.find(x => x.k === lastItemK) || cart.items[0]; if (!it) return;
+  const lot = $('rb_lot').value.trim().toUpperCase(), exp = $('rb_exp').value, mfg = $('rb_mfg').value;
+  if (lot) it.lot = lot; if (exp) it.exp = exp; if (mfg) it.mfg = mfg; it.prefill = false;
+  saveCart(); renderCart(it.k); $('readBox').hidden = true; $('rbApply').hidden = true;
+  say(`${it.name || '방금 줄'}: 제조번호 ${it.lot || '-'} · 유효 ${it.exp || '-'}`, 'good');
+};
 async function fromPhoto(file) {
   if (!file) return;
   try { await readImage(file) } finally { $('photo').value = '' }
@@ -1264,7 +1375,7 @@ showBy(); $('s_url').value = settings.url || '';
 /* ---------- 연결 ---------- */
 $('btnScan').onclick = () => stream || zreader ? stopScan() : startScan();
 $('btnStop').onclick = stopScan;
-$('btnSnap').onclick = () => { const v = $('video'); if (v.videoWidth) readImage(v) };
+$('btnSnap').onclick = () => { if (textMode) readBand(); else setTextMode(true) };
 $('btnPhoto').onclick = () => $('photo').click();
 $('photo').onchange = e => fromPhoto(e.target.files[0]);
 $('btnManual').onclick = () => { addCode($('manualCode').value); $('manualCode').value = '' };
