@@ -54,6 +54,15 @@ textarea{min-height:56px;resize:vertical}
 .qty button{min-height:44px;width:44px;padding:0;font-size:22px;line-height:1}
 .qty input{width:58px;text-align:center;padding:9px 4px;font-weight:700}
 .item details{margin-top:6px}
+.item summary.miss{color:var(--red)}
+.item .pf{font-size:12px;background:var(--sky);color:var(--blue2);padding:0 6px;border-radius:8px}
+.qrow{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:8px}
+.qrow .ql{font-size:12px;color:var(--mute);margin-bottom:2px}
+.qrow .qty button{width:40px;min-height:42px}
+.qrow .qty input{width:100%;flex:1}
+.qrow .qty{gap:3px}
+.item .tot{margin-top:6px;font-size:14px;color:var(--ink)}
+.item .tot b{color:var(--blue2)}
 .item summary{font-size:14px;color:var(--blue2);cursor:pointer;min-height:32px;display:flex;align-items:center}
 .grid3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px}
 .grid3 input{font-size:15px;padding:9px 8px}
@@ -80,18 +89,51 @@ textarea{min-height:56px;resize:vertical}
 #dlg .box p{margin:0 0 16px}
 #dlg .box div{display:flex;gap:8px;justify-content:flex-end}
 .hint{font-size:13px;color:var(--mute);margin-top:6px}
+.byrow{display:flex;align-items:center;gap:12px;padding:10px 16px}
+.byrow label{margin:0;font-size:16px;font-weight:700;color:var(--ink);flex:none}
+.byrow select{flex:1;font-weight:700}
+.byrow.need{border-color:var(--red);background:#fff5f4}
+.combo{position:relative}
+.combo input{padding-right:48px}
+.combo #placeClear{position:absolute;right:4px;top:4px;min-height:40px;width:40px;padding:0;border:0;background:none;color:var(--mute);font-size:18px}
+.opts{position:absolute;left:0;right:0;top:calc(100% + 4px);background:#fff;border:1px solid var(--line);border-radius:12px;box-shadow:0 8px 24px rgba(0,0,0,.14);max-height:290px;overflow-y:auto;z-index:6;padding:4px}
+.opts button{display:block;width:100%;text-align:left;border:0;border-radius:8px;min-height:46px;font-size:17px;font-weight:400;padding:8px 12px}
+.opts button:hover,.opts button.on{background:var(--sky)}
+.opts .none{padding:12px;color:var(--mute);font-size:15px}
+.dv .req{font-size:14px;color:var(--mute)}
+.sync{display:flex;align-items:center;gap:8px;font-size:14px;padding:8px 10px;border-radius:10px;background:var(--sky);margin-bottom:10px}
+.sync span{flex:1}
+.sync.off{background:#f1f3f5;color:var(--mute)}.sync.wait{background:#fff0d6;color:#7a4a00}.sync.err{background:#fde4e1;color:var(--red)}
+.dv .by{display:inline-block;font-size:12px;font-weight:700;background:var(--sky);color:var(--blue2);padding:1px 8px;border-radius:10px;margin-left:4px;vertical-align:middle}
+.dv .pend{display:inline-block;font-size:12px;font-weight:700;background:#fff0d6;color:var(--amber);padding:1px 8px;border-radius:10px;margin-left:4px;vertical-align:middle}
+#settings summary{font-size:18px;font-weight:700;cursor:pointer;min-height:40px;display:flex;align-items:center}
+#settings ol{padding-left:20px;font-size:15px;margin:8px 0}
+#settings ol li{margin-bottom:6px}
+#settings pre{max-height:120px;overflow:auto;font-size:11px;background:#f1f3f5;padding:8px;border-radius:8px;white-space:pre-wrap}
+.btnrow{display:flex;flex-wrap:wrap;gap:8px;margin-top:10px}
+#toast{position:fixed;left:50%;bottom:90px;transform:translateX(-50%);background:#13222e;color:#fff;padding:10px 16px;border-radius:10px;font-size:15px;display:none;z-index:8;max-width:90vw;text-align:center}
 </style>
 </head>
 <body>
 <header>
   <h1>수액 배달 기록</h1>
-  <p>장소 고르고 → 상자 연속으로 찍고 → 받는 사람 넣고 → 저장</p>
+  <p>장소 고르고 → 상자 연속으로 찍고 → 신청인·수령인 넣고 → 저장</p>
 </header>
 <main>
+  <section class="card byrow">
+    <label for="f_by">배달 담당자</label>
+    <select id="f_by"><option value="">담당자 고르기</option><option>최대호</option><option>전준영</option></select>
+  </section>
+
   <section class="card">
     <h2><span><span class="step">1</span>배달 장소</span><span class="total" id="editNote"></span></h2>
-    <input id="f_place" placeholder="예: 7병동, 응급실, 수술실">
-    <div class="chips" id="placeChips"></div>
+    <div class="combo">
+      <input id="f_place" autocomplete="off" placeholder="눌러서 고르기 · 검색 (예: 12, 응급, ㅇㄱ)">
+      <button type="button" id="placeClear" aria-label="지우기">✕</button>
+      <div class="opts" id="placeOpts" hidden></div>
+    </div>
+    <div class="hint">자주 가는 곳</div>
+    <div class="chips" id="placeChips" style="margin-top:2px"></div>
   </section>
 
   <section class="card">
@@ -110,8 +152,12 @@ textarea{min-height:56px;resize:vertical}
   </section>
 
   <section class="card">
-    <h2><span><span class="step">3</span>받은 사람</span></h2>
-    <input id="f_who" placeholder="예: 김OO 간호사">
+    <h2><span><span class="step">3</span>신청인 · 수령인</span></h2>
+    <label for="f_req" style="margin-top:0">신청인 (요청한 사람)</label>
+    <input id="f_req" placeholder="예: 김OO 수간호사">
+    <div class="chips" id="reqChips"></div>
+    <label for="f_who">수령인 (실제로 받은 사람)</label>
+    <div style="display:flex;gap:6px"><input id="f_who" placeholder="예: 이OO 간호사"><button type="button" class="small" id="btnSame" style="flex:none">신청인과 같음</button></div>
     <div class="chips" id="whoChips"></div>
     <label for="f_memo">메모</label>
     <textarea id="f_memo" placeholder="필요하면 적어 주세요"></textarea>
@@ -120,14 +166,46 @@ textarea{min-height:56px;resize:vertical}
 
   <section class="card">
     <h2><span>배달 기록</span><span class="total" id="count"></span></h2>
+    <div class="sync off" id="syncBar"><span id="syncText">구글 시트 연결 안 됨 — 아래 설정에서 연결해 주세요</span><button class="small" id="btnSync">새로고침</button></div>
     <div class="tools">
       <input id="q" placeholder="검색 (병동·이름·제품·제조번호)">
       <select id="range"><option value="today">오늘</option><option value="7">최근 7일</option><option value="30">최근 30일</option><option value="all">전체</option></select>
+      <select id="byFilter"><option value="all">모든 담당자</option><option value="me">내 기록만</option></select>
     </div>
     <div class="tools"><button class="small" id="btnCsv">엑셀 파일로 받기</button></div>
     <div id="list"></div>
   </section>
-  <p class="hint" style="text-align:center">기록은 이 핸드폰 안에 저장돼요. 주기적으로 '엑셀 파일로 받기'로 백업해 두세요.</p>
+
+  <section class="card">
+    <details id="settings">
+      <summary>⚙ 설정 (담당자 · 구글 시트 연결)</summary>
+      <label for="s_me">배달 담당자 (이 핸드폰을 쓰는 사람)</label>
+      <select id="s_me"><option value="">담당자 고르기</option><option>최대호</option><option>전준영</option></select>
+      <label for="s_url">구글 시트 연결 주소</label>
+      <input id="s_url" class="code" placeholder="https://script.google.com/macros/s/.../exec">
+      <div class="btnrow">
+        <button class="small main" id="btnSaveSet">저장하고 연결 시험</button>
+        <button class="small" id="btnShare">다른 핸드폰용 연결 주소 복사</button>
+      </div>
+      <textarea id="shareBox" readonly style="display:none;margin-top:8px;font-size:13px"></textarea>
+      <div class="hint">다른 핸드폰에서 이 연결 주소를 열면 구글 시트 연결이 자동으로 돼요. 맨 위에서 담당자만 고르면 끝이에요.</div>
+      <details style="margin-top:14px">
+        <summary style="font-size:16px">처음 한 번: 구글 시트 만드는 방법</summary>
+        <ol>
+          <li>컴퓨터에서 <b>sheets.google.com</b> 접속 → <b>빈 스프레드시트</b> 만들기 → 제목을 "수액 배달 기록"으로 바꾸기</li>
+          <li>위 메뉴 <b>확장 프로그램 → Apps Script</b></li>
+          <li>열린 화면의 원래 코드를 모두 지우고, 아래 <b>코드 복사</b>로 복사한 코드를 붙여넣기 → 💾 저장</li>
+          <li>오른쪽 위 <b>배포 → 새 배포</b> → 톱니바퀴에서 <b>웹 앱</b> 선택</li>
+          <li>실행 계정: <b>나</b>, 액세스 권한: <b>모든 사용자</b> → <b>배포</b></li>
+          <li><b>액세스 승인</b> → 내 구글 계정 선택 → "확인되지 않은 앱" 화면이 나오면 <b>고급 → (안전하지 않음)으로 이동 → 허용</b> (내가 만든 코드라 괜찮아요)</li>
+          <li>나오는 <b>웹 앱 URL</b>을 복사해서 위 "구글 시트 연결 주소" 칸에 붙여넣기</li>
+        </ol>
+        <button class="small" id="btnCopyCode">코드 복사</button>
+        <pre id="gsView"></pre>
+      </details>
+    </details>
+  </section>
+  <p class="hint" style="text-align:center">구글 시트에 연결하지 않으면 기록은 이 핸드폰 안에만 저장돼요.</p>
 </main>
 
 <div class="bar">
@@ -135,6 +213,208 @@ textarea{min-height:56px;resize:vertical}
   <button class="save" id="btnSave" disabled>저장</button>
 </div>
 
+<div id="toast"></div>
+<script type="text/plain" id="gscode">// 수액 배달 기록 — 구글 시트 연결용 코드
+// 이 코드는 구글 시트의 [확장 프로그램 → Apps Script]에 붙여넣어 사용합니다.
+// 탭 3개를 만듭니다: 출고일지(날짜별 인쇄용) / 배달기록(전체 원본) / 바코드(바코드-제품 이름)
+const SHEET = '배달기록', PSHEET = '바코드', LSHEET = '출고일지';
+const HEAD = ['배달ID', '배달일시', '담당자', '배달장소', '신청인', '수령인', '제약사', '제품명', '바코드', '제조번호', '제조일자', '유통기한', '박스수', '총수량(낱개)', '메모', '수정시각', '낱개수'];
+const PHEAD = ['바코드', '제품명'];
+const LHEAD = ['병 동', '제 품 명', '수 량', '제조번호', '유효기간', '비 고'];
+
+function ss_() { return SpreadsheetApp.getActiveSpreadsheet(); }
+
+function getSheet_(name, head) {
+  const ss = ss_();
+  let s = ss.getSheetByName(name);
+  if (!s) {
+    s = ss.insertSheet(name);
+    s.getRange(1, 1, s.getMaxRows(), head.length).setNumberFormat('@');
+    s.getRange(1, 1, 1, head.length).setValues([head]).setFontWeight('bold').setBackground('#e8f2f9');
+    s.setFrozenRows(1);
+    return s;
+  }
+  if (name === SHEET) {
+    if (s.getRange(1, 5).getDisplayValue() === '받은사람') s.insertColumnAfter(4);   // 예전 버전: 신청인 칸 끼워 넣기
+    if (s.getRange(1, head.length).getDisplayValue() !== head[head.length - 1]) {
+      s.getRange(1, 1, s.getMaxRows(), head.length).setNumberFormat('@');
+      s.getRange(1, 1, 1, head.length).setValues([head]).setFontWeight('bold').setBackground('#e8f2f9');
+    }
+  }
+  return s;
+}
+
+function json_(o) {
+  return ContentService.createTextOutput(JSON.stringify(o)).setMimeType(ContentService.MimeType.JSON);
+}
+
+function readAll_() {
+  const s = getSheet_(SHEET, HEAD);
+  const rows = s.getLastRow() > 1 ? s.getRange(2, 1, s.getLastRow() - 1, HEAD.length).getDisplayValues() : [];
+  const map = {};
+  rows.forEach(function (r) {
+    if (!r[0]) return;
+    let d = map[r[0]];
+    if (!d) d = map[r[0]] = { id: r[0], time: String(r[1]).replace(' ', 'T'), by: r[2], place: r[3], req: r[4], who: r[5], memo: r[14], updated: Number(r[15]) || 0, items: [] };
+    let qty = Number(r[12]) || 0, ea = 0;
+    if (r[16] === '개') { ea = qty; qty = 0; }           // 예전 버전 기록
+    else if (r[16] !== '박스') ea = Number(r[16]) || 0;
+    d.items.push({ maker: r[6], name: r[7], code: r[8], lot: r[9], mfg: r[10], exp: r[11], qty: qty, ea: ea, pcs: r[13] === '' ? '' : Number(r[13]) });
+  });
+  const ps = getSheet_(PSHEET, PHEAD);
+  const pv = ps.getLastRow() > 1 ? ps.getRange(2, 1, ps.getLastRow() - 1, 2).getDisplayValues() : [];
+  const products = {};
+  pv.forEach(function (r) { if (r[0] && r[1]) products[r[0]] = r[1]; });
+  return { ok: true, deliveries: Object.keys(map).map(function (k) { return map[k]; }), products: products };
+}
+
+function doGet() {
+  return json_(readAll_());
+}
+
+function doPost(e) {
+  const lock = LockService.getScriptLock();
+  lock.waitLock(30000);
+  try {
+    const b = JSON.parse(e.postData.contents || '{}');
+    const s = getSheet_(SHEET, HEAD);
+    const up = b.upsert || [];
+    const rm = (b.remove || []).concat(up.map(function (d) { return d.id; }));
+    if (up.length || rm.length) {
+      const last = s.getLastRow();
+      let rows = last > 1 ? s.getRange(2, 1, last - 1, HEAD.length).getDisplayValues() : [];
+      rows = rows.filter(function (r) { return r[0] && rm.indexOf(r[0]) < 0; });
+      up.forEach(function (d) {
+        (d.items || []).forEach(function (x) {
+          rows.push([d.id, String(d.time || '').replace('T', ' '), d.by || '', d.place || '', d.req || '', d.who || '', x.maker || '', x.name || '', x.code || '', x.lot || '', x.mfg || '', x.exp || '',
+            Number(x.qty) || 0, x.pcs === '' || x.pcs == null ? '' : Number(x.pcs), d.memo || '', String(d.updated || ''), Number(x.ea) || 0]);
+        });
+      });
+      rows.sort(function (a, c) { return a[1] < c[1] ? 1 : a[1] > c[1] ? -1 : 0; });
+      if (last > 1) s.getRange(2, 1, last - 1, HEAD.length).clearContent();
+      if (rows.length) {
+        s.getRange(2, 1, rows.length, HEAD.length).setNumberFormat('@');
+        s.getRange(2, 13, rows.length, 2).setNumberFormat('0');
+        s.getRange(2, 17, rows.length, 1).setNumberFormat('0');
+        s.getRange(2, 1, rows.length, HEAD.length).setValues(rows);
+      }
+    }
+    if (b.products) {
+      const ps = getSheet_(PSHEET, PHEAD);
+      const pl = ps.getLastRow();
+      const pv = pl > 1 ? ps.getRange(2, 1, pl - 1, 2).getDisplayValues() : [];
+      const pm = {};
+      pv.forEach(function (r) { if (r[0]) pm[r[0]] = r[1]; });
+      let changed = false;
+      Object.keys(b.products).forEach(function (k) {
+        if (k && b.products[k] && pm[k] !== b.products[k]) { pm[k] = String(b.products[k]); changed = true; }
+      });
+      if (changed) {
+        const out = Object.keys(pm).map(function (k) { return [k, pm[k]]; });
+        ps.getRange(2, 1, out.length, 2).setNumberFormat('@').setValues(out);
+      }
+    }
+    try { buildLog_(); } catch (err) { console.log(err); }
+  } finally {
+    lock.releaseLock();
+  }
+  return json_(readAll_());
+}
+
+/* ---------------- 출고일지 (사진 양식) ---------------- */
+function logSheet_() {
+  const ss = ss_();
+  let s = ss.getSheetByName(LSHEET);
+  if (!s) {
+    s = ss.insertSheet(LSHEET, 0);
+    s.setColumnWidths(1, 1, 110); s.setColumnWidths(2, 1, 220); s.setColumnWidths(3, 1, 80);
+    s.setColumnWidths(4, 1, 120); s.setColumnWidths(5, 1, 110); s.setColumnWidths(6, 1, 230);
+    s.getRange(1, 1, 1, 6).merge().setValue('<수액출고 일지>').setFontSize(18).setFontWeight('bold').setHorizontalAlignment('center');
+    s.getRange(2, 1, 1, 4).merge().setValue('오른쪽 날짜를 바꾸면 그날 일지가 나와요').setFontColor('#888888').setFontSize(9);
+    s.getRange(2, 5).setValue('일자 →').setHorizontalAlignment('right').setFontWeight('bold');
+    s.getRange(2, 6).setNumberFormat('yyyy"년" mm"월" dd"일"').setFontWeight('bold').setHorizontalAlignment('right')
+      .setValue(new Date()).setBackground('#fff8dc');
+    s.getRange(3, 1, 1, 6).setValues([LHEAD]).setBackground('#2f5597').setFontColor('#ffffff').setFontWeight('bold').setHorizontalAlignment('center');
+    s.setFrozenRows(3);
+  }
+  return s;
+}
+
+function dateKey_(v) {
+  const tz = ss_().getSpreadsheetTimeZone();
+  if (v instanceof Date) return Utilities.formatDate(v, tz, 'yyyy-MM-dd');
+  const m = String(v || '').match(/(\d{4})\D+(\d{1,2})\D+(\d{1,2})/);
+  if (m) return m[1] + '-' + ('0' + m[2]).slice(-2) + '-' + ('0' + m[3]).slice(-2);
+  return Utilities.formatDate(new Date(), tz, 'yyyy-MM-dd');
+}
+
+function shortDate_(d) {   // 2029-08-30 → 29.08.30
+  const m = String(d || '').match(/^\d{2}(\d{2})-(\d{2})-(\d{2})$/);
+  return m ? m[1] + '.' + m[2] + '.' + m[3] : String(d || '');
+}
+
+function buildLog_() {
+  const s = logSheet_();
+  const key = dateKey_(s.getRange(2, 6).getValue());
+  const all = readAll_().deliveries
+    .filter(function (d) { return String(d.time).slice(0, 10) === key; })
+    .sort(function (a, b) { return a.time < b.time ? -1 : a.time > b.time ? 1 : 0; });
+
+  const rows = [], marks = [];
+  let total = 0;
+  all.forEach(function (d, di) {
+    const notes = ['신청: ' + (d.req || '-') + ' / 수령: ' + (d.who || '-'), '담당: ' + (d.by || '-')];
+    if (d.memo) notes.push('메모: ' + d.memo);
+    const start = rows.length;
+    const n = Math.max(d.items.length, 1);
+    if (notes.length > n) notes.splice(n - 1, notes.length, notes.slice(n - 1).join(' / '));   // 줄이 모자라면 비고를 한 칸에 모으기
+    for (let i = 0; i < n; i++) {
+      const x = d.items[i];
+      let qty = '';
+      if (x) {
+        qty = x.pcs !== '' && x.pcs != null ? x.pcs : [x.qty ? x.qty + '박스' : '', x.ea ? x.ea + '개' : ''].filter(String).join('+');
+        if (typeof qty === 'number') total += qty;
+      }
+      rows.push([i === 0 ? d.place : '', x ? x.name : '', x ? qty : '', x ? x.lot : '', x ? shortDate_(x.exp) : '', notes[i] || '']);
+    }
+    marks.push([start, rows.length]);
+    if (di < all.length - 1) rows.push(['', '', '', '', '', '']);
+  });
+  if (all.length) rows.push(['', '합계', total, all.length + '곳', '', '(수량은 낱개 기준)']);
+
+  const max = Math.max(s.getMaxRows() - 3, 1);
+  s.getRange(4, 1, max, 6).breakApart().clear();
+  if (!all.length) {
+    s.getRange(4, 1, 1, 6).merge().setValue('이 날짜에는 출고 기록이 없어요').setHorizontalAlignment('center').setFontColor('#888888');
+    return;
+  }
+  const r = s.getRange(4, 1, rows.length, 6);
+  r.setNumberFormat('@');
+  s.getRange(4, 3, rows.length, 1).setNumberFormat('0');
+  r.setValues(rows).setHorizontalAlignment('center').setVerticalAlignment('middle').setFontSize(10);
+  s.getRange(4, 6, rows.length, 1).setHorizontalAlignment('left');
+  r.setBorder(true, true, true, true, true, true, '#bfbfbf', SpreadsheetApp.BorderStyle.SOLID);
+  marks.forEach(function (m) { s.getRange(4 + m[0], 1, m[1] - m[0], 6).setBorder(true, true, true, true, null, null, '#404040', SpreadsheetApp.BorderStyle.SOLID); });
+  s.getRange(4 + rows.length - 1, 1, 1, 6).setFontWeight('bold').setBackground('#f2f2f2');
+}
+
+function onOpen() {
+  SpreadsheetApp.getUi().createMenu('수액 일지')
+    .addItem('오늘 일지 보기', 'showToday')
+    .addItem('일지 새로 고침', 'buildLog_')
+    .addToUi();
+  showToday();
+}
+
+function showToday() {
+  logSheet_().getRange(2, 6).setValue(new Date());
+  buildLog_();
+}
+
+function onEdit(e) {
+  if (e && e.range && e.range.getSheet().getName() === LSHEET && e.range.getRow() === 2 && e.range.getColumn() === 6) buildLog_();
+}
+</script>
 <div id="dlg"><div class="box"><p id="dlgText"></p><div><button class="small" id="dlgNo">취소</button><button class="small main" id="dlgYes">확인</button></div></div></div>
 
 <script src="https://cdn.jsdelivr.net/npm/@zxing/library@0.21.3/umd/index.min.js"></script>
@@ -172,6 +452,16 @@ const CATALOG = [
 ['대한','메트리날주 100ml',20],['대한','대한멸균증류수 1000ml',10],['대한','관류용 멸균증류수 1000ml',10],
 ['대한','5%포도당주사액 1000ml',10],['대한','5%포도당가생리식염액 1000ml',10]
 ].map(([m, n, u]) => ({ m, n, u }));
+const PLACES = ['약국','약국(오전)','약국(오후)','진단검사','영상의학과','중앙공급실','주사실','12병동','13병동','14병동','16병동','18병동','33병동','34병동','35병동','36병동','37병동','73병동','응급실','수술실','마취회복실','1-ICU','2-ICU','3-ICU','비뇨기과','검진내시경실','치료내시경실','혈관조영실','인공신장실','소아과','난임센터','혈관센터','성형외과','산부인과','핵의학과','정형외과','이비인후과','가정간호','간호국','일반외과'];
+const CHO = 'ㄱㄲㄴㄷㄸㄹㅁㅂㅃㅅㅆㅇㅈㅉㅊㅋㅌㅍㅎ';
+const chosung = t => [...t].map(c => { const k = c.charCodeAt(0) - 0xAC00; return k >= 0 && k < 11172 ? CHO[Math.floor(k / 588)] : c }).join('');
+const normTxt = t => String(t).toLowerCase().replace(/[\s()\-]/g, '');
+function placeMatch(p, q) {
+  q = normTxt(q); if (!q) return true;
+  const n = normTxt(p);
+  if (n.includes(q)) return true;
+  return /^[ㄱ-ㅎ]+$/.test(q) && chosung(n).startsWith(q);
+}
 const findProd = name => CATALOG.find(p => p.n === String(name || '').trim());
 
 let products = load(PKEY, {});
@@ -182,7 +472,20 @@ if (!deliveries) {   // 예전 버전 기록 옮기기
   store(DKEY, deliveries);
 }
 let cart = load(CKEY, { items: [], place: '', who: '', memo: '', editId: null });
-const saveCart = () => { cart.place = $('f_place').value; cart.who = $('f_who').value; cart.memo = $('f_memo').value; store(CKEY, cart) };
+function fixItem(x) {   // 예전 버전(박스/개 하나만 고르던 방식) 기록 바꾸기
+  if (x.ea == null) { if (x.unit === '개') { x.ea = +x.qty || 0; x.qty = 0 } else x.ea = 0 }
+  delete x.unit; x.qty = +x.qty || 0; x.ea = +x.ea || 0;
+  return x;
+}
+deliveries.forEach(d => d.items.forEach(fixItem));
+cart.items.forEach(fixItem);
+const SKEY = 'ivSettings.v1', QKEY = 'ivSyncQueue.v1';
+let settings = load(SKEY, { me: '', url: '' });
+let queue = load(QKEY, { remove: [], products: {} });   // 아직 시트로 못 보낸 삭제·바코드 이름
+let lastSync = null, syncErr = '', syncing = false;
+function toast(t) { const el = $('toast'); el.textContent = t; el.style.display = 'block'; clearTimeout(toast.t); toast.t = setTimeout(() => el.style.display = 'none', 2500) }
+function learn(code, name) { if (code && name && products[code] !== name) { products[code] = name; queue.products[code] = name; store(PKEY, products); store(QKEY, queue) } }
+const saveCart = () => { cart.place = $('f_place').value; cart.req = $('f_req').value; cart.who = $('f_who').value; cart.memo = $('f_memo').value; store(CKEY, cart) };
 
 /* ---------- GS1 바코드 해석 ---------- */
 const GS = '\u001d';
@@ -230,26 +533,46 @@ function addCode(raw) {
   const g = parseGS1(raw);
   const code = g ? (g['01'] || g['02'] || raw) : raw;
   const lot = g && g['10'] || '', exp = g && g['17'] ? yymmdd(g['17']) : '', mfg = g && g['11'] ? yymmdd(g['11']) : '';
-  let it = cart.items.find(x => x.code === code && (x.lot || '') === lot);
+  let it = cart.items.find(x => x.code === code && (!lot || (x.lot || '') === lot));
   if (it) it.qty += 1;
   else {
     const name = products[code] || products[code.replace(/^0+/, '')] || '';
-    it = { k: uid(), code, name, lot, exp, mfg, qty: 1 };
+    it = { k: uid(), code, name, lot, exp, mfg, qty: 1, ea: 0 };
+    fillLot(it);
     cart.items.unshift(it);
   }
   saveCart(); renderCart(it.k);
   const label = it.name || '처음 보는 바코드';
-  $('live').textContent = `${label} +1 → ${it.qty}박스  |  합계 ${cartBoxes()}박스`;
-  say(it.name ? `${it.name} ${it.qty}박스` : '처음 보는 바코드예요. 아래 주황색 칸에서 제품을 골라 주세요.', it.name ? 'good' : 'bad');
+  $('live').textContent = `${label} +1박스 → ${itemQty(it)}  |  합계 ${qtyText(cartBoxes(), cartSingles())}`;
+  say(it.name ? `${it.name} ${itemQty(it)}` : '처음 보는 바코드예요. 아래 주황색 칸에서 제품을 골라 주세요.', it.name ? 'good' : 'bad');
   beep(!!it.name);
 }
 function addByName(name) {
   name = name.trim(); if (!name) return;
   let it = cart.items.find(x => !x.code && x.name === name);
-  if (it) it.qty += 1; else { it = { k: uid(), code: '', name, lot: '', exp: '', mfg: '', qty: 1 }; cart.items.unshift(it) }
+  if (it) it.qty += 1; else { it = { k: uid(), code: '', name, lot: '', exp: '', mfg: '', qty: 1, ea: 0 }; fillLot(it); cart.items.unshift(it) }
   saveCart(); renderCart(it.k);
 }
-const cartBoxes = () => cart.items.reduce((s, x) => s + (+x.qty || 0), 0);
+const sumBox = arr => arr.reduce((s, x) => s + (+x.qty || 0), 0);
+const sumEa = arr => arr.reduce((s, x) => s + (+x.ea || 0), 0);
+const cartBoxes = () => sumBox(cart.items);
+const cartSingles = () => sumEa(cart.items);
+const qtyText = (b, n) => [b ? `${b}박스` : '', n ? `${n}개` : ''].filter(Boolean).join(' + ') || '0개';
+const itemQty = x => qtyText(+x.qty || 0, +x.ea || 0);
+function pcsOf(x) {   // 총 낱개 = 박스 × 포장단위 + 낱개
+  const p = findProd(x.name), b = +x.qty || 0, e = +x.ea || 0;
+  return p ? b * p.u + e : (b ? '' : e);
+}
+function lastLot(name) {   // 같은 제품의 가장 최근 제조번호·유효기간
+  if (!name) return null;
+  for (const d of deliveries) for (const x of d.items) if (x.name === name && (x.lot || x.exp)) return { lot: x.lot || '', exp: x.exp || '', mfg: x.mfg || '' };
+  return null;
+}
+function fillLot(it) {
+  if (it.lot || it.exp) return;
+  const l = lastLot(it.name);
+  if (l) { it.lot = l.lot; it.exp = l.exp; it.mfg = it.mfg || l.mfg; it.prefill = true }
+}
 
 /* ---------- 유통기한 ---------- */
 function expState(exp) {
@@ -260,20 +583,30 @@ function expState(exp) {
 const expTag = exp => { const s = expState(exp); return s === 'exp' ? '<span class="tag exp">기한 지남</span>' : s === 'soon' ? '<span class="tag soon">기한 임박</span>' : '' };
 
 /* ---------- 장바구니 화면 ---------- */
+let cartBusy = false;
 function renderCart(flashK) {
-  const n = cart.items.length, b = cartBoxes();
-  $('cartTotal').textContent = n ? `${n}품목 · ${b}박스` : '';
+  if (cartBusy) return;
+  cartBusy = true;
+  try { renderCart_(flashK) } finally { cartBusy = false }
+}
+function renderCart_(flashK) {
+  const n = cart.items.length, b = cartBoxes(), sg = cartSingles();
+  $('cartTotal').textContent = n ? `${n}품목 · ${qtyText(b, sg)}` : '';
   $('cart').innerHTML = n ? cart.items.map(it => {
     const p = findProd(it.name);
     const known = !!it.name;
     return `<div class="item${known ? '' : ' new'}${it.k === flashK ? ' flash' : ''}" data-k="${esc(it.k)}">
       <div class="r1">
         <div class="nm">${known ? esc(it.name) + expTag(it.exp) : '<input data-f="name" list="nameList" placeholder="제품 이름 고르기">'}
-          <div class="sub">${p ? esc(p.m) + ' · 1박스 ' + p.u + '개 → 낱개 ' + (it.qty * p.u) + '개' : ''}${it.code ? (p ? ' · ' : '') + '<span class="code">' + esc(it.code) + '</span>' : ''}</div>
+          <div class="sub">${p ? esc(p.m) + ' · 포장단위 1박스 = ' + p.u + '개' : '목록에 없는 제품 (포장단위 모름)'}</div>
         </div>
-        <div class="qty"><button type="button" data-a="minus" aria-label="빼기">−</button><input data-f="qty" type="number" inputmode="numeric" min="0" value="${esc(it.qty)}" aria-label="박스 수"><button type="button" data-a="plus" aria-label="더하기">+</button></div>
       </div>
-      <details${it.lot || it.exp || it.mfg ? '' : ''}><summary>제조번호·날짜 ${it.lot || it.exp ? '(' + esc([it.lot, it.exp && '유효 ' + it.exp].filter(Boolean).join(' · ')) + ')' : '입력'}</summary>
+      <div class="qrow">
+        <div><div class="ql">박스</div><div class="qty"><button type="button" data-a="minus" data-t="qty" aria-label="박스 빼기">−</button><input data-f="qty" type="number" inputmode="numeric" min="0" value="${esc(it.qty)}" aria-label="박스 수"><button type="button" data-a="plus" data-t="qty" aria-label="박스 더하기">+</button></div></div>
+        <div><div class="ql">낱개</div><div class="qty"><button type="button" data-a="minus" data-t="ea" aria-label="낱개 빼기">−</button><input data-f="ea" type="number" inputmode="numeric" min="0" value="${esc(it.ea)}" aria-label="낱개 수"><button type="button" data-a="plus" data-t="ea" aria-label="낱개 더하기">+</button></div></div>
+      </div>
+      <div class="tot">${p ? (it.qty ? `${it.qty}박스 × ${p.u}개${it.ea ? ` + 낱개 ${it.ea}개` : ''}` : `낱개 ${it.ea}개`) + ` = 총 <b>${pcsOf(it)}개</b>` : `${esc(itemQty(it))}`}</div>
+      <details><summary class="${it.lot && it.exp ? '' : 'miss'}">${it.lot || it.exp ? '제조번호 ' + esc(it.lot || '없음') + ' · 유효 ' + esc(it.exp || '없음') + (it.prefill ? ' <span class="pf">지난번 값</span>' : '') : '⚠ 제조번호·유효기간 입력'}</summary>
         <div class="grid3">
           <div><label>제조번호</label><input data-f="lot" class="code" value="${esc(it.lot)}"></div>
           <div><label>제조일자</label><input data-f="mfg" type="date" value="${esc(it.mfg)}"></div>
@@ -281,19 +614,26 @@ function renderCart(flashK) {
         </div>
         ${known ? '<button type="button" class="small" data-a="rename" style="margin-top:6px">제품 이름 바꾸기</button>' : ''}
         <button type="button" class="small" data-a="del" style="margin-top:6px">이 줄 삭제</button>
+        ${it.code ? `<div class="hint">바코드 <span class="code">${esc(it.code)}</span></div>` : ''}
       </details>
     </div>`;
   }).join('') : '<div class="empty">찍은 상자가 여기에 쌓여요</div>';
-  const unknown = cart.items.filter(x => !x.name).length;
-  $('barSum').innerHTML = n ? `<b>${b}박스</b> · ${n}품목${unknown ? `<br><span style="color:var(--red)">제품 미선택 ${unknown}줄</span>` : ''}` : '아직 찍은 상자가 없어요';
+  const unknown = cart.items.filter(x => !x.name).length, nolot = cart.items.filter(x => !x.lot || !x.exp).length;
+  const warn = [unknown ? `제품 미선택 ${unknown}줄` : '', nolot ? `제조번호·유효기간 빈 줄 ${nolot}` : ''].filter(Boolean).join(' · ');
+  $('barSum').innerHTML = n ? `<b>${qtyText(b, sg)}</b> · ${n}품목${warn ? `<br><span style="color:var(--red);font-size:13px">${warn}</span>` : ''}` : '아직 찍은 상자가 없어요';
   $('btnSave').disabled = !n;
 }
 $('cart').addEventListener('click', e => {
   const btn = e.target.closest('button[data-a]'); if (!btn) return;
   const k = btn.closest('.item').dataset.k, it = cart.items.find(x => x.k === k); if (!it) return;
   const a = btn.dataset.a;
-  if (a === 'plus') it.qty = (+it.qty || 0) + 1;
-  if (a === 'minus') { it.qty = Math.max(0, (+it.qty || 0) - 1); if (!it.qty) return ask(`${it.name || '이 줄'}을(를) 목록에서 뺄까요?`, () => { cart.items = cart.items.filter(x => x !== it); saveCart(); renderCart() }, () => { it.qty = 1; renderCart() }) }
+  const t = btn.dataset.t === 'ea' ? 'ea' : 'qty';
+  if (a === 'plus') it[t] = (+it[t] || 0) + 1;
+  if (a === 'minus') {
+    if (!(+it[t] > 0)) return;
+    it[t] = (+it[t] || 0) - 1;
+    if (!it.qty && !it.ea) return ask(`${it.name || '이 줄'}을(를) 목록에서 뺄까요?`, () => { cart.items = cart.items.filter(x => x !== it); saveCart(); renderCart() }, () => { it[t] = 1; renderCart() });
+  }
   if (a === 'del') return ask(`${it.name || '이 줄'}을(를) 목록에서 뺄까요?`, () => { cart.items = cart.items.filter(x => x !== it); saveCart(); renderCart() });
   if (a === 'rename') { it.name = ''; }
   saveCart(); renderCart();
@@ -301,9 +641,11 @@ $('cart').addEventListener('click', e => {
 $('cart').addEventListener('change', e => {
   const f = e.target.dataset.f; if (!f) return;
   const it = cart.items.find(x => x.k === e.target.closest('.item').dataset.k); if (!it) return;
-  if (f === 'qty') it.qty = Math.max(0, Math.round(+e.target.value || 0));
+  if (f === 'qty' || f === 'ea') it[f] = Math.max(0, Math.round(+e.target.value || 0));
   else it[f] = e.target.value.trim();
-  if (f === 'name' && it.name && it.code) { products[it.code] = it.name; store(PKEY, products) }
+  if (f === 'name' && it.name && it.code) learn(it.code, it.name);
+  if (f === 'name') fillLot(it);
+  if (f === 'lot' || f === 'exp' || f === 'mfg') it.prefill = false;
   saveCart(); renderCart();
 });
 
@@ -376,7 +718,7 @@ function topValues(field, n) {
   return Object.entries(c).sort((a, b) => b[1] - a[1]).slice(0, n).map(x => x[0]);
 }
 function renderChips() {
-  [['place', 'placeChips', 'f_place'], ['who', 'whoChips', 'f_who']].forEach(([f, box, inp]) => {
+  [['place', 'placeChips', 'f_place'], ['req', 'reqChips', 'f_req'], ['who', 'whoChips', 'f_who']].forEach(([f, box, inp]) => {
     $(box).innerHTML = topValues(f, 10).map(v => `<button type="button" data-inp="${inp}" data-v="${esc(v)}">${esc(v)}</button>`).join('');
   });
   const names = [...new Set([...CATALOG.map(p => p.n), ...Object.values(products)])];
@@ -387,56 +729,66 @@ document.addEventListener('click', e => { const b = e.target.closest('.chips but
 /* ---------- 저장 ---------- */
 $('btnSave').onclick = () => {
   saveCart();
-  const items = cart.items.filter(x => +x.qty > 0);
+  const items = cart.items.filter(x => +x.qty > 0 || +x.ea > 0);
   if (!items.length) { say('찍은 상자가 없어요.', 'bad'); return }
   if (items.some(x => !x.name)) { say('제품을 고르지 않은 줄이 있어요 (주황색 칸).', 'bad'); $('cart').scrollIntoView({ behavior: 'smooth' }); return }
   if (!cart.place.trim()) { $('f_place').focus(); window.scrollTo({ top: 0, behavior: 'smooth' }); return say('배달 장소를 넣어 주세요.', 'bad') }
-  if (!cart.who.trim()) { $('f_who').focus(); return say('받은 사람 이름을 넣어 주세요.', 'bad') }
+  if (!cart.req.trim()) { $('f_req').focus(); return say('신청인을 넣어 주세요.', 'bad') }
+  if (!cart.who.trim()) { $('f_who').focus(); return say('수령인을 넣어 주세요.', 'bad') }
+  if (!settings.me) { needBy(); return say('맨 위에서 배달 담당자를 골라 주세요.', 'bad') }
   const expired = items.filter(x => expState(x.exp) === 'exp');
+  const nolot = items.filter(x => !x.lot || !x.exp);
   const go = () => {
-    const d = { id: cart.editId || uid(), time: cart.time || nowLocal(), place: cart.place.trim(), who: cart.who.trim(), memo: cart.memo.trim(),
-      items: items.map(({ code, name, lot, mfg, exp, qty }) => ({ code, name, lot, mfg, exp, qty: +qty })) };
-    items.forEach(x => { if (x.code && x.name) products[x.code] = x.name });
-    store(PKEY, products);
+    const old = deliveries.find(x => x.id === cart.editId);
+    const d = { id: cart.editId || uid(), time: cart.time || nowLocal(), by: old ? old.by : settings.me, place: cart.place.trim(), req: cart.req.trim(), who: cart.who.trim(), memo: cart.memo.trim(),
+      updated: Date.now(), synced: false,
+      items: items.slice().reverse().map(({ code, name, lot, mfg, exp, qty, ea }) => ({ code, name, lot, mfg, exp, qty: +qty || 0, ea: +ea || 0 })) };
+    items.forEach(x => learn(x.code, x.name));
     const i = deliveries.findIndex(x => x.id === d.id);
     if (i >= 0) deliveries[i] = d; else deliveries.unshift(d);
     deliveries.sort((a, b) => (b.time || '').localeCompare(a.time || ''));
     if (!store(DKEY, deliveries)) return;
     stopScan();
-    cart = { items: [], place: '', who: '', memo: '', editId: null };
-    $('f_place').value = ''; $('f_who').value = ''; $('f_memo').value = '';
+    cart = { items: [], place: '', req: '', who: '', memo: '', editId: null };
+    $('f_place').value = ''; $('f_req').value = ''; $('f_who').value = ''; $('f_memo').value = '';
     store(CKEY, cart); renderCart(); renderList(); renderChips(); editUI();
-    say(`저장했어요! ${d.place} → ${d.who}, ${d.items.reduce((s, x) => s + x.qty, 0)}박스`, 'good');
+    say(`저장했어요! ${d.place} → 수령 ${d.who}, ${d.items.length}품목`, 'good');
     window.scrollTo({ top: 0, behavior: 'smooth' });
+    sync();
   };
-  if (expired.length) ask(`유통기한이 지난 제품이 ${expired.length}줄 있어요. 그래도 저장할까요?`, go); else go();
+  const go2 = () => { if (expired.length) ask(`유통기한이 지난 제품이 ${expired.length}줄 있어요. 그래도 저장할까요?`, go); else go() };
+  const go3 = () => { if (nolot.length) ask(`제조번호나 유효기간이 빈 줄이 ${nolot.length}개 있어요. 그래도 저장할까요?`, go2); else go2() };
+  if (!PLACES.includes(cart.place.trim())) ask(`"${cart.place.trim()}"은(는) 장소 목록에 없어요. 그대로 저장할까요?`, go3); else go3();
 };
 function editUI() {
   $('editNote').textContent = cart.editId ? '기록 수정 중' : '';
   $('btnCancelEdit').style.display = cart.editId ? 'inline-block' : 'none';
   $('btnSave').textContent = cart.editId ? '수정 저장' : '저장';
 }
-$('btnCancelEdit').onclick = () => { cart = { items: [], place: '', who: '', memo: '', editId: null }; $('f_place').value = $('f_who').value = $('f_memo').value = ''; store(CKEY, cart); renderCart(); editUI(); say('수정을 취소했어요.') };
+$('btnCancelEdit').onclick = () => { cart = { items: [], place: '', req: '', who: '', memo: '', editId: null }; $('f_place').value = $('f_req').value = $('f_who').value = $('f_memo').value = ''; store(CKEY, cart); renderCart(); editUI(); say('수정을 취소했어요.') };
 
 /* ---------- 기록 목록 ---------- */
 function filtered() {
   const q = $('q').value.trim().toLowerCase(), rg = $('range').value;
   let from = null;
   if (rg === 'today') from = today0(); else if (rg !== 'all') { from = today0(); from.setDate(from.getDate() - (+rg - 1)) }
+  const onlyMe = $('byFilter').value === 'me';
   return deliveries.filter(d => {
     if (from && new Date(d.time) < from) return false;
-    if (q && ![d.place, d.who, d.memo, ...d.items.flatMap(x => [x.name, x.lot, x.code])].join(' ').toLowerCase().includes(q)) return false;
+    if (onlyMe && (d.by || '') !== settings.me) return false;
+    if (q && ![d.place, d.req, d.who, d.by, d.memo, ...d.items.flatMap(x => [x.name, x.lot, x.code])].join(' ').toLowerCase().includes(q)) return false;
     return true;
   });
 }
 function renderList() {
   const rows = filtered();
-  const total = rows.reduce((s, d) => s + d.items.reduce((t, x) => t + x.qty, 0), 0);
-  $('count').textContent = `${rows.length}건 · ${total}박스`;
+  const all = rows.flatMap(d => d.items);
+  $('count').textContent = `${rows.length}건 · ${qtyText(sumBox(all), sumEa(all))}`;
   $('list').innerHTML = rows.length ? rows.map(d => `<div class="dv">
-      <div class="top"><span class="where">${esc(d.place)} → ${esc(d.who)}</span><span class="when">${esc((d.time || '').replace('T', ' ').slice(5))}</span></div>
-      <div class="hint" style="margin:0">${d.items.length}품목 · ${d.items.reduce((t, x) => t + x.qty, 0)}박스${d.memo ? ' · ' + esc(d.memo) : ''}</div>
-      <ul>${d.items.map(x => `<li>${esc(x.name || x.code)} × ${esc(x.qty)}${expTag(x.exp)} ${x.lot || x.exp ? `<span>(${esc([x.lot, x.exp && '유효 ' + x.exp].filter(Boolean).join(' · '))})</span>` : ''}</li>`).join('')}</ul>
+      <div class="top"><span class="where">${esc(d.place)}</span><span class="when">${esc((d.time || '').replace('T', ' ').slice(5))}</span></div>
+      <div class="req">신청 <b>${esc(d.req || '-')}</b> · 수령 <b>${esc(d.who)}</b></div>
+      <div class="hint" style="margin:0">${d.items.length}품목 · ${qtyText(sumBox(d.items), sumEa(d.items))}${d.memo ? ' · ' + esc(d.memo) : ''}${d.by ? `<span class="by">담당 ${esc(d.by)}</span>` : ''}${settings.url && d.synced === false ? '<span class="pend">전송 대기</span>' : ''}</div>
+      <ul>${d.items.map(x => `<li>${esc(x.name || x.code)} × ${esc(itemQty(x))}${pcsOf(x) !== '' && x.qty ? ` <span>= ${pcsOf(x)}개</span>` : ''}${expTag(x.exp)} ${x.lot || x.exp ? `<span>(${esc([x.lot, x.exp && '유효 ' + x.exp].filter(Boolean).join(' · '))})</span>` : ''}</li>`).join('')}</ul>
       <div class="act"><button class="small" data-edit="${esc(d.id)}">수정</button><button class="small" data-del="${esc(d.id)}">삭제</button></div>
     </div>`).join('') : '<div class="empty">기록이 없어요.</div>';
 }
@@ -445,14 +797,45 @@ $('list').addEventListener('click', e => {
   if (ed) {
     const d = deliveries.find(x => x.id === ed.dataset.edit); if (!d) return;
     const go = () => {
-      cart = { editId: d.id, time: d.time, place: d.place, who: d.who, memo: d.memo || '', items: d.items.map(x => ({ ...x, k: uid() })) };
-      $('f_place').value = d.place; $('f_who').value = d.who; $('f_memo').value = d.memo || '';
+      cart = { editId: d.id, time: d.time, place: d.place, req: d.req || '', who: d.who, memo: d.memo || '', items: d.items.slice().reverse().map(x => ({ ...x, k: uid() })) };
+      $('f_place').value = d.place; $('f_req').value = d.req || ''; $('f_who').value = d.who; $('f_memo').value = d.memo || '';
       store(CKEY, cart); renderCart(); editUI(); window.scrollTo({ top: 0, behavior: 'smooth' });
     };
     if (cart.items.length && !cart.editId) ask('지금 찍고 있던 상자 목록이 지워져요. 계속할까요?', go); else go();
   }
-  if (dl) ask('이 배달 기록을 삭제할까요?', () => { deliveries = deliveries.filter(x => x.id !== dl.dataset.del); store(DKEY, deliveries); renderList(); renderChips() });
+  if (dl) ask('이 배달 기록을 삭제할까요? (구글 시트에서도 지워져요)', () => {
+    const id = dl.dataset.del;
+    deliveries = deliveries.filter(x => x.id !== id); store(DKEY, deliveries);
+    if (settings.url && !queue.remove.includes(id)) { queue.remove.push(id); store(QKEY, queue) }
+    renderList(); renderChips(); sync();
+  });
 });
+
+/* ---------- 배달 장소 고르기 ---------- */
+let optIdx = -1;
+function showOpts() {
+  const q = $('f_place').value, nq = normTxt(q), list = PLACES.filter(p => placeMatch(p, q)).sort((a, b) => (normTxt(b).startsWith(nq) ? 1 : 0) - (normTxt(a).startsWith(nq) ? 1 : 0));
+  const box = $('placeOpts');
+  optIdx = -1;
+  box.innerHTML = list.length ? list.map(p => `<button type="button" data-v="${esc(p)}">${esc(p)}</button>`).join('')
+    : `<div class="none">목록에 없어요. 이대로 쓰려면 그냥 두세요.</div>`;
+  box.hidden = false;
+}
+function pickPlace(v) { $('f_place').value = v; $('placeOpts').hidden = true; saveCart(); $('f_place').blur() }
+$('f_place').addEventListener('focus', showOpts);
+$('f_place').addEventListener('click', showOpts);
+$('f_place').addEventListener('input', showOpts);
+$('f_place').addEventListener('keydown', e => {
+  const bs = [...$('placeOpts').querySelectorAll('button')];
+  if (e.key === 'ArrowDown' || e.key === 'ArrowUp') { e.preventDefault(); if (!bs.length) return; optIdx = (optIdx + (e.key === 'ArrowDown' ? 1 : -1) + bs.length) % bs.length; bs.forEach((b, i) => b.classList.toggle('on', i === optIdx)); bs[optIdx].scrollIntoView({ block: 'nearest' }) }
+  if (e.key === 'Enter') { e.preventDefault(); const b = bs[optIdx >= 0 ? optIdx : 0]; if (b) pickPlace(b.dataset.v) }
+  if (e.key === 'Escape') $('placeOpts').hidden = true;
+});
+$('placeOpts').addEventListener('pointerdown', e => e.preventDefault());
+$('placeOpts').addEventListener('click', e => { const b = e.target.closest('button[data-v]'); if (b) pickPlace(b.dataset.v) });
+$('f_place').addEventListener('blur', () => setTimeout(() => { $('placeOpts').hidden = true }, 150));
+$('placeClear').onclick = () => { $('f_place').value = ''; saveCart(); $('f_place').focus(); showOpts() };
+$('btnSame').onclick = () => { $('f_who').value = $('f_req').value; saveCart() };
 
 /* ---------- 확인 창 ---------- */
 let dlgYes = null, dlgNo = null;
@@ -464,10 +847,10 @@ $('dlgYes').onclick = () => { $('dlg').style.display = 'none'; if (dlgYes) dlgYe
 $('btnCsv').onclick = () => {
   const rows = filtered();
   if (!rows.length) { say('내보낼 기록이 없어요.', 'bad'); return }
-  const head = ['배달일시', '배달장소', '받은사람', '제약사', '제품명', '바코드', '제조번호', '제조일자', '유통기한', '박스수', '낱개환산', '메모'];
+  const head = ['배달일시', '담당자', '배달장소', '신청인', '수령인', '제약사', '제품명', '바코드', '제조번호', '제조일자', '유통기한', '박스', '낱개', '총수량(낱개)', '메모'];
   const cell = v => `"${String(v ?? '').replace(/"/g, '""')}"`;
   const body = rows.flatMap(d => d.items.map(x => { const p = findProd(x.name);
-    return [d.time.replace('T', ' '), d.place, d.who, p ? p.m : '', x.name, x.code ? '\t' + x.code : '', x.lot, x.mfg, x.exp, x.qty, p ? x.qty * p.u : '', d.memo].map(cell).join(',') }));
+    return [d.time.replace('T', ' '), d.by || '', d.place, d.req || '', d.who, p ? p.m : '', x.name, x.code ? '\t' + x.code : '', x.lot, x.mfg, x.exp, x.qty, x.ea, pcsOf(x), d.memo].map(cell).join(',') }));
   const csv = '﻿' + [head.map(cell).join(','), ...body].join('\r\n');
   const a = document.createElement('a');
   a.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' }));
@@ -475,6 +858,122 @@ $('btnCsv').onclick = () => {
   document.body.appendChild(a); a.click(); a.remove();
   setTimeout(() => URL.revokeObjectURL(a.href), 2000);
 };
+
+/* ---------- 구글 시트 동기화 ---------- */
+const pendingCount = () => deliveries.filter(d => d.synced === false).length + queue.remove.length;
+function renderSync() {
+  const bar = $('syncBar'), t = $('syncText'), n = pendingCount();
+  if (!settings.url) { bar.className = 'sync off'; t.textContent = '구글 시트 연결 안 됨 — 아래 설정에서 연결해 주세요'; return }
+  if (syncing) { bar.className = 'sync'; t.textContent = '구글 시트와 맞추는 중…'; return }
+  if (syncErr) { bar.className = 'sync err'; t.textContent = `${syncErr}. 기록은 핸드폰에 남아 있고, 연결되면 자동으로 보내요${n ? ` (대기 ${n}건)` : ''}`; return }
+  if (n) { bar.className = 'sync wait'; t.textContent = `전송 대기 ${n}건`; return }
+  bar.className = 'sync';
+  t.textContent = `구글 시트 연결됨${lastSync ? ` · ${pad(lastSync.getHours())}:${pad(lastSync.getMinutes())} 맞춤` : ''}${settings.me ? ` · 나: ${settings.me}` : ''}`;
+}
+const norm = s => ({ id: String(s.id), time: s.time || '', by: s.by || '', place: s.place || '', req: s.req || '', who: s.who || '', memo: s.memo || '', updated: +s.updated || 0, synced: true,
+  items: (s.items || []).map(x => ({ code: x.code || '', name: x.name || '', lot: x.lot || '', mfg: x.mfg || '', exp: x.exp || '', qty: x.qty, ea: x.ea, unit: x.unit })).map(fixItem) });
+function merge(data) {
+  const server = new Map((data.deliveries || []).map(d => [String(d.id), d]));
+  const out = [];
+  deliveries.forEach(d => {
+    if (d.synced !== true) { out.push(d); server.delete(d.id); return }   // 아직 안 보낸 내 기록은 그대로
+    const s = server.get(d.id);
+    if (s) { out.push(norm(s)); server.delete(d.id) }                     // 시트에 없으면 다른 사람이 지운 것
+  });
+  server.forEach((s, id) => { if (!queue.remove.includes(id)) out.push(norm(s)) });
+  out.sort((a, b) => (b.time || '').localeCompare(a.time || ''));
+  deliveries = out;
+  products = { ...products, ...(data.products || {}), ...queue.products };
+  store(DKEY, deliveries); store(PKEY, products);
+  renderList(); renderChips();
+}
+async function sync() {
+  if (!settings.url || syncing) { renderSync(); return }
+  syncing = true; renderSync();
+  try {
+    const sent = deliveries.filter(d => d.synced === false);
+    const sentRemove = [...queue.remove], sentProducts = { ...queue.products };
+    let res;
+    if (sent.length || sentRemove.length || Object.keys(sentProducts).length) {
+      const upsert = sent.map(d => ({ id: d.id, time: d.time, by: d.by, place: d.place, req: d.req || '', who: d.who, memo: d.memo, updated: d.updated,
+        items: d.items.map(x => { const p = findProd(x.name); return { code: x.code, name: x.name, lot: x.lot, mfg: x.mfg, exp: x.exp, qty: x.qty, ea: x.ea, maker: p ? p.m : '', pcs: pcsOf(x) } }) }));
+      res = await fetch(settings.url, { method: 'POST', body: JSON.stringify({ upsert, remove: sentRemove, products: sentProducts }) });
+    } else res = await fetch(settings.url);
+    const data = await res.json();
+    if (!data || !data.ok) throw new Error('bad');
+    const ver = new Map(sent.map(d => [d.id, d.updated]));
+    deliveries.forEach(d => { if (ver.has(d.id) && ver.get(d.id) === d.updated) d.synced = true });
+    queue.remove = queue.remove.filter(id => !sentRemove.includes(id));
+    Object.keys(sentProducts).forEach(k => { if (queue.products[k] === sentProducts[k]) delete queue.products[k] });
+    store(QKEY, queue);
+    merge(data);
+    lastSync = new Date(); syncErr = '';
+  } catch (e) {
+    syncErr = navigator.onLine === false ? '인터넷 연결 없음' : '구글 시트에 연결하지 못했어요';
+  }
+  syncing = false; renderSync(); renderList();
+}
+setInterval(() => { if (document.visibilityState === 'visible') sync() }, 60000);
+document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') sync() });
+window.addEventListener('online', () => sync());
+$('btnSync').onclick = () => { syncErr = ''; sync() };
+
+/* ---------- 설정 ---------- */
+async function copyText(text, okMsg) {
+  try { await navigator.clipboard.writeText(text); toast(okMsg); return true } catch (e) { return false }
+}
+$('btnSaveSet').onclick = async () => {
+  const me = $('s_me').value, url = $('s_url').value.trim();
+  if (!me) { $('s_me').focus(); return toast('배달 담당자를 골라 주세요') }
+  if (url && !/^https:\/\/script\.google\.com\/.+\/exec$/.test(url)) return toast('주소가 이상해요. script.google.com 으로 시작하고 /exec 로 끝나는 주소예요');
+  const first = url && !settings.url;
+  settings = { me, url }; store(SKEY, settings); showBy();
+  if (first) {   // 연결 전에 저장해 둔 내 기록도 시트로 보내기
+    deliveries.forEach(d => { if (d.synced === undefined) { d.synced = false; d.by = d.by || me; d.updated = d.updated || Date.now() } });
+    store(DKEY, deliveries);
+  }
+  if (!url) { renderSync(); renderList(); return toast('저장했어요 (구글 시트 연결 없음)') }
+  syncErr = ''; await sync();
+  toast(syncErr ? '연결 실패: 주소와 배포 설정(모든 사용자)을 확인해 주세요' : '구글 시트에 연결됐어요!');
+};
+$('btnShare').onclick = async () => {
+  if (!settings.url) return toast('먼저 구글 시트 연결 주소를 저장해 주세요');
+  const link = location.origin + location.pathname + '?s=' + encodeURIComponent(settings.url);
+  const box = $('shareBox'); box.value = link; box.style.display = 'block';
+  if (!(await copyText(link, '복사했어요. 카톡으로 다른 분께 보내 주세요'))) { box.focus(); box.select(); toast('위 주소를 길게 눌러 복사해 주세요') }
+};
+$('gsView').textContent = $('gscode').textContent.trim();
+$('btnCopyCode').onclick = async () => {
+  if (!(await copyText($('gsView').textContent, '코드를 복사했어요. Apps Script에 붙여넣어 주세요'))) {
+    const r = document.createRange(); r.selectNodeContents($('gsView')); const s = getSelection(); s.removeAllRanges(); s.addRange(r);
+    toast('선택된 코드를 복사해 주세요');
+  }
+};
+{
+  const sp = new URLSearchParams(location.search).get('s');
+  if (sp && /^https:\/\/script\.google\.com\/.+\/exec$/.test(sp)) {
+    if (settings.url !== sp) {
+      settings.url = sp; store(SKEY, settings);
+      deliveries.forEach(d => { if (d.synced === undefined) { d.synced = false; d.updated = d.updated || Date.now() } });
+      store(DKEY, deliveries);
+    }
+    history.replaceState(null, '', location.pathname);
+    toast(settings.me ? '구글 시트에 연결됐어요' : '구글 시트에 연결됐어요. 맨 위에서 배달 담당자를 골라 주세요');
+    if (!settings.me) needBy();
+  }
+}
+function showBy() {
+  $('f_by').value = settings.me || ''; $('s_me').value = settings.me || '';
+  if ($('f_by').value !== (settings.me || '')) { settings.me = ''; store(SKEY, settings); $('f_by').value = ''; $('s_me').value = '' }   // 목록에 없는 예전 이름
+  $('f_by').closest('.card').classList.toggle('need', !settings.me);
+}
+function needBy() { window.scrollTo({ top: 0, behavior: 'smooth' }); $('f_by').closest('.card').classList.add('need'); $('f_by').focus() }
+$('f_by').addEventListener('change', () => {
+  settings.me = $('f_by').value; store(SKEY, settings); showBy(); renderSync(); renderList();
+  if (settings.me) toast(`배달 담당자: ${settings.me}`);
+});
+$('s_me').addEventListener('change', () => { $('f_by').value = $('s_me').value });
+showBy(); $('s_url').value = settings.url || '';
 
 /* ---------- 연결 ---------- */
 $('btnScan').onclick = () => stream || zreader ? stopScan() : startScan();
@@ -484,12 +983,13 @@ $('photo').onchange = e => fromPhoto(e.target.files[0]);
 $('btnManual').onclick = () => { addCode($('manualCode').value); $('manualCode').value = '' };
 $('manualCode').addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); $('btnManual').click() } });
 $('btnManualName').onclick = () => { addByName($('manualName').value); $('manualName').value = '' };
-['f_place', 'f_who', 'f_memo'].forEach(id => $(id).addEventListener('change', saveCart));
+['f_place', 'f_req', 'f_who', 'f_memo'].forEach(id => $(id).addEventListener('change', saveCart));
 $('q').addEventListener('input', renderList);
 $('range').addEventListener('change', renderList);
+$('byFilter').addEventListener('change', renderList);
 
-$('f_place').value = cart.place || ''; $('f_who').value = cart.who || ''; $('f_memo').value = cart.memo || '';
-renderCart(); renderList(); renderChips(); editUI();
+$('f_place').value = cart.place || ''; $('f_req').value = cart.req || ''; $('f_who').value = cart.who || ''; $('f_memo').value = cart.memo || '';
+renderCart(); renderList(); renderChips(); editUI(); renderSync(); sync();
 }
 </script>
 </body>
