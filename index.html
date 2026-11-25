@@ -61,6 +61,13 @@ textarea{min-height:56px;resize:vertical}
 .qrow .qty button{width:40px;min-height:42px}
 .qrow .qty input{width:100%;flex:1}
 .qrow .qty{gap:3px}
+.readbox{margin-top:10px;border:2px solid var(--blue2);border-radius:12px;padding:12px;background:#f5faff}
+.readbox .rb-h{font-size:16px}
+.readbox .rb-h span{font-size:13px;color:var(--mute)}
+.readbox .grid3 input{font-size:15px;padding:9px 8px}
+.readbox .grid3 label{margin:6px 0 2px;font-size:12px}
+.readbox .btnrow button{flex:1 1 120px}
+#cam .snap{position:absolute;right:8px;bottom:52px;background:rgba(255,255,255,.92);border:0;font-weight:700}
 .kind{margin-top:8px;display:flex;flex-wrap:wrap;gap:6px}
 .kind .ql{width:100%;font-size:13px;color:var(--mute)}
 .kind button{flex:1 1 130px;min-height:42px;font-size:15px;padding:4px 8px;border-radius:10px}
@@ -144,11 +151,27 @@ textarea{min-height:56px;resize:vertical}
     <h2><span><span class="step">2</span>상자 찍기</span><span class="total" id="cartTotal"></span></h2>
     <div class="scanbtns">
       <button class="main" id="btnScan">📷 연속 찍기</button>
-      <button id="btnPhoto">사진으로</button>
+      <button id="btnPhoto">사진 읽기</button>
     </div>
     <input type="file" id="photo" accept="image/*" capture="environment" hidden>
-    <div id="cam"><video id="video" playsinline muted></video><div class="aim"></div><button class="close small" id="btnStop">닫기</button><div class="live" id="live">상자 바코드를 차례로 비춰 주세요</div></div>
-    <p id="msg">같은 상자가 여러 개면 한 개만 찍고 + 버튼이나 숫자로 개수를 맞춰도 돼요.</p>
+    <div id="cam"><video id="video" playsinline muted></video><div class="aim"></div><button class="close small" id="btnStop">닫기</button><button class="snap small" id="btnSnap">📝 글씨 읽기</button><div class="live" id="live">상자 바코드를 차례로 비춰 주세요</div></div>
+    <p id="msg">상자의 <b>작은 네모 바코드</b>를 찍으면 제조번호·유효기간까지 한 번에 들어가고, 같은 상자를 두 번 세지 않아요.</p>
+    <div class="readbox" id="readBox" hidden>
+      <div class="rb-h"><b>읽은 결과</b> <span id="rbSrc"></span></div>
+      <div id="rbWait" class="hint"></div>
+      <div id="rbForm">
+        <label for="rb_name" style="margin-top:6px">제품</label>
+        <input id="rb_name" list="nameList" placeholder="못 읽었으면 골라 주세요">
+        <div class="grid3">
+          <div><label for="rb_lot">제조번호</label><input id="rb_lot" class="code"></div>
+          <div><label for="rb_mfg">제조일자</label><input id="rb_mfg" type="date"></div>
+          <div><label for="rb_exp">유통기한</label><input id="rb_exp" type="date"></div>
+        </div>
+        <div class="hint">글씨로 읽은 값은 틀릴 수 있어요. 확인하고 고친 뒤 추가해 주세요.</div>
+        <div class="btnrow"><button type="button" class="small main" id="rbBox">📦 박스 +1로 추가</button><button type="button" class="small main" id="rbEa">🧴 낱개 +1로 추가</button><button type="button" class="small" id="rbCancel">취소</button></div>
+        <details style="margin-top:8px"><summary class="hint" style="cursor:pointer">읽은 글씨 그대로 보기</summary><pre id="rbText" style="white-space:pre-wrap;font-size:12px;background:#f1f3f5;padding:8px;border-radius:8px;max-height:140px;overflow:auto"></pre></details>
+      </div>
+    </div>
     <div class="manual"><input id="manualCode" class="code" inputmode="numeric" placeholder="바코드 번호 직접 입력"><button class="small" id="btnManual">추가</button></div>
     <div class="manual"><input id="manualName" list="nameList" placeholder="바코드 없이 제품 이름으로 추가"><button class="small" id="btnManualName">추가</button></div>
     <datalist id="nameList"></datalist>
@@ -549,27 +572,63 @@ function beep(ok) {
     o.start(); o.stop(beepCtx.currentTime + .12);
   } catch (e) {}
 }
-function addCode(raw) {
-  raw = String(raw).trim(); if (!raw) return;
+/* 찍힌 바코드가 무엇인지 구분 */
+function classify(raw) {
+  raw = String(raw || '').trim();
   const g = parseGS1(raw);
-  const code = g ? (g['01'] || g['02'] || raw) : raw;
-  const lot = g && g['10'] || '', exp = g && g['17'] ? yymmdd(g['17']) : '', mfg = g && g['11'] ? yymmdd(g['11']) : '';
-  const pk = prodOf(code);
-  let it, isEa;
-  if (pk) {
-    isEa = pk.ea;
-    it = cart.items.find(x => x.name === pk.name && (!lot || (x.lot || '') === lot));
-    if (!it) { it = { k: uid(), code, ck: isEa ? 'ea' : 'box', name: pk.name, lot, exp, mfg, qty: 0, ea: 0 }; fillLot(it); cart.items.unshift(it) }
-  } else {
-    it = cart.items.find(x => x.code === code && !x.name);
-    if (!it) { it = { k: uid(), code, ck: 'box', name: '', lot, exp, mfg, qty: 0, ea: 0 }; cart.items.unshift(it) }
-    isEa = it.ck === 'ea';
+  if (g && (g['01'] || g['02'])) return { type: 'gs1', code: (g['01'] || g['02']).padStart(14, '0'), lot: g['10'] || '', exp: g['17'] ? yymmdd(g['17']) : '', mfg: g['11'] ? yymmdd(g['11']) : '', serial: g['21'] || '', raw };
+  const digits = raw.replace(/\s/g, '');
+  if (/^\d{8,14}$/.test(digits)) return { type: 'gtin', code: digits.padStart(14, '0'), raw };
+  if (/^[A-Z0-9\-]{4,14}$/i.test(raw) && /[A-Z]/i.test(raw) && /\d/.test(raw)) return { type: 'lot', lot: raw.toUpperCase(), raw };
+  return { type: 'other', raw };
+}
+const RANK = { gs1: 3, gtin: 2, lot: 1, other: 0 };
+let lastHit = { code: '', raw: '', t: 0, k: '' }, lastItemK = '';
+function findLine(name, lot) {
+  return cart.items.find(x => x.name === name && (!lot || (x.lot || '') === lot || x.prefill || !x.lot));
+}
+function addCode(raw) {
+  const c = classify(raw);
+  if (c.type === 'other') { say('제품 바코드가 아니에요 (배송 라벨 QR 등). 상자에 인쇄된 바코드를 찍어 주세요.', 'bad'); beep(false); return }
+  if (c.type === 'lot') {   // 제조번호만 들어 있는 바코드 → 방금 찍은 줄에 넣기
+    const it = cart.items.find(x => x.k === lastItemK) || cart.items[0];
+    if (!it) { say(`제조번호 ${c.lot} — 제품 바코드를 먼저 찍어 주세요.`, 'bad'); return }
+    if (!it.lot || it.prefill) { it.lot = c.lot; it.prefill = false; saveCart(); renderCart(it.k); say(`${it.name || '방금 줄'} 제조번호 ${c.lot} 넣었어요`, 'good'); beep(true) }
+    else if (it.lot !== c.lot) say(`제조번호가 달라요 (${it.lot} ↔ ${c.lot}). 줄을 확인해 주세요.`, 'bad');
+    return;
   }
-  if (isEa) it.ea = (+it.ea || 0) + 1; else it.qty = (+it.qty || 0) + 1;
+  const now = Date.now();
+  // 일련번호가 있는 네모 바코드: 같은 상자를 두 번 세지 않기
+  if (c.serial && cart.items.some(x => (x.serials || []).includes(c.code + '/' + c.serial))) {
+    say('이미 찍은 상자예요 (같은 일련번호).', 'bad'); beep(false); return;
+  }
+  // 같은 상자의 다른 바코드(줄바코드 ↔ 네모 바코드)를 바로 이어 찍은 경우: 세지 않고 정보만 보태기
+  const sameBox = lastHit.code === c.code && lastHit.raw !== c.raw && now - lastHit.t < 3500 && !(c.serial && lastHit.serial && c.serial !== lastHit.serial);
+  const pk = prodOf(c.code);
+  let it, isEa;
+  if (sameBox) it = cart.items.find(x => x.k === lastHit.k);
+  if (!it && pk) it = findLine(pk.name, c.lot);
+  if (!it && !pk) it = cart.items.find(x => x.code === c.code && !x.name);
+  if (!it) {
+    const guessEa = pk ? pk.ea : c.code[0] === '0';   // 14자리 첫 숫자 0 = 낱개 바코드인 경우가 많음, 1~8 = 박스
+    it = { k: uid(), code: c.code, ck: guessEa ? 'ea' : 'box', name: pk ? pk.name : '', lot: c.lot, exp: c.exp, mfg: c.mfg, qty: 0, ea: 0, serials: [] };
+    if (pk && !c.lot) fillLot(it);
+    cart.items.unshift(it);
+  }
+  isEa = pk ? pk.ea : it.ck === 'ea';
+  if (c.lot && (!it.lot || it.prefill)) { it.lot = c.lot; it.prefill = false }
+  if (c.exp && (!it.exp || it.prefill)) it.exp = c.exp;
+  if (c.mfg && !it.mfg) it.mfg = c.mfg;
+  if (c.serial) (it.serials = it.serials || []).push(c.code + '/' + c.serial);
+  lastHit = { code: c.code, raw: c.raw, t: now, k: it.k, serial: c.serial || lastHit.serial };
+  if (!sameBox) lastHit.serial = c.serial;
+  lastItemK = it.k;
+  if (!sameBox) { if (isEa) it.ea = (+it.ea || 0) + 1; else it.qty = (+it.qty || 0) + 1 }
   saveCart(); renderCart(it.k);
   const label = it.name || '처음 보는 바코드';
-  $('live').textContent = `${label} ${isEa ? '낱개' : '박스'} +1 → ${itemQty(it)}  |  합계 ${qtyText(cartBoxes(), cartSingles())}`;
-  say(it.name ? `${it.name} ${isEa ? '낱개' : '박스'} +1 → ${itemQty(it)}` : '처음 보는 바코드예요. 주황색 칸에서 박스/낱개 바코드와 제품을 골라 주세요.', it.name ? 'good' : 'bad');
+  const what = sameBox ? '같은 상자 (개수 그대로' + (c.lot ? ', 제조번호 확인' : '') + ')' : `${isEa ? '낱개' : '박스'} +1`;
+  $('live').textContent = `${label} ${what} → ${itemQty(it)}  |  합계 ${qtyText(cartBoxes(), cartSingles())}`;
+  say(it.name ? `${it.name} ${what} → ${itemQty(it)}` : '처음 보는 바코드예요. 주황색 칸에서 박스/낱개 바코드와 제품을 골라 주세요.', it.name ? 'good' : 'bad');
   beep(!!it.name);
 }
 function addByName(name) {
@@ -728,23 +787,214 @@ function stopScan() {
   $('video').srcObject = null; $('cam').style.display = 'none';
   $('btnScan').textContent = '📷 연속 찍기';
 }
+/* ---------- 글씨(OCR) 해석 ---------- */
+const OCR_ALIAS = [   // 영어·약어 표기 → 목록 이름의 핵심 글자
+  [/klenzo|크린조|크린죠/i, '크린조'], [/winuf|위너프/i, '위너프'], [/omapf|오마프/i, '오마프'],
+  [/hartmann?[\s-]*dex|하트만\s*덱스|h\/d/i, '하트만덱스'], [/hartmann?|하트만/i, '하트만'],
+  [/plasma|플라즈마|플라스마/i, '플라즈마'], [/mannitol|만니톨/i, '만니톨'], [/metronida|메트리날/i, '메트리날'],
+  [/dopamin|도파민/i, '도파민'], [/levoflox|레보플록사신/i, '레보플록사신'], [/nephsol|네프솔/i, '네프솔'],
+  [/water\s*for\s*inj|주사용수/i, '주사용수'], [/증류수|distilled|sterile\s*water/i, '증류수'], [/관류|irrigat|for\s*ir\b/i, '관류'],
+  [/n\/s|normal\s*saline|엔에스/i, '엔에스'], [/생리식염|0\.9\s*%?\s*nacl|sodium\s*chloride/i, '생리식염'],
+  [/포도당|dextrose|glucose/i, '포도당'], [/에스디|s\.?d\s*1\s*:\s*[24]/i, '에스디']
+];
+function bigrams(t) { const a = []; for (let i = 0; i < t.length - 1; i++) a.push(t.slice(i, i + 2)); return a }
+function dice(a, b) {
+  const A = bigrams(a), B = bigrams(b); if (!A.length || !B.length) return 0;
+  let m = 0; const used = B.slice();
+  A.forEach(x => { const i = used.indexOf(x); if (i >= 0) { m++; used.splice(i, 1) } });
+  return 2 * m / (A.length + B.length);
+}
+function guessProduct(text) {
+  const flat = text.replace(/\s+/g, '').toLowerCase();
+  const vols = [...text.matchAll(/(\d{2,4})\s*[mｍ][lｌL]/gi)].map(m => +m[1]);
+  const keys = OCR_ALIAS.filter(([re]) => re.test(text)).map(([, k]) => k);
+  const pct = (text.match(/(\d{1,2}(?:\.\d+)?)\s*%/) || [])[1];
+  let best = null, bestScore = 0;
+  for (const p of CATALOG) {
+    const core = p.n.replace(/^(중외|대한)\s*/, '').replace(/\(PP\)/, '').replace(/\d+\s*ml/i, '').replace(/\s+/g, '').toLowerCase();
+    const vol = +(p.n.match(/(\d+)\s*ml/i) || [])[1];
+    let score = 0;
+    // 글자 비슷한 정도 (읽은 글씨 안의 같은 길이 구간 중 가장 비슷한 곳)
+    let d = 0;
+    for (let i = 0; i + core.length <= flat.length + 1; i++) d = Math.max(d, dice(core, flat.slice(i, i + core.length + 1)));
+    score += d;
+    keys.forEach(k => { if (core.includes(k.toLowerCase())) score += 0.6 });
+    if (vol && vols.includes(vol)) score += 0.5;
+    const pp = (core.match(/(\d{1,2}(?:\.\d+)?)%/) || [])[1];
+    if (pp && pct && pp === pct) score += 0.3;
+    if (pp && pct && pp !== pct) score -= 0.4;
+    if (p.n.includes('중외') && /중외|jw/i.test(text)) score += 0.1;
+    if (p.n.startsWith('대한') && /대한|daihan/i.test(text)) score += 0.1;
+    if (score > bestScore) { bestScore = score; best = p }
+  }
+  return bestScore >= 1.0 ? best : null;
+}
+function ocrDates(text) {
+  const out = [];
+  const re = /(?<![\dA-Za-z])((?:20)?\d{2})(?:\s*[.\-/년]\s*|\s+)(\d{1,2})(?:\s*[.\-/월]\s*|\s+)(\d{1,2})(?!\d)/g; let m;
+  while ((m = re.exec(text))) {
+    let y = m[1].length === 2 ? 2000 + +m[1] : +m[1], mo = +m[2], d = +m[3];
+    if (mo < 1 || mo > 12 || d < 1 || d > 31 || y < 2015 || y > 2045) continue;
+    const before = text.slice(Math.max(0, m.index - 14), m.index);
+    let kind = /사용기한|유효기간|유통기한|exp|use\s*by|까지/i.test(before) ? 'exp' : /제조일|제조년|mfg|manuf/i.test(before) ? 'mfg' : '';
+    out.push({ v: `${y}-${pad(mo)}-${pad(d)}`, kind, at: m.index, raw: m[0] });
+  }
+  return out;
+}
+function ocrLot(text, dates) {
+  const ok = x => /[A-Z]/.test(x) && /\d/.test(x) && !/ML|EA|KG|BTL|X\d/.test(x) && x.length >= 5 && x.length <= 12;
+  // '제조번호:' / 'Lot' 바로 뒤 (띄어 찍힌 글자도 붙여서)
+  for (const m of text.matchAll(/(?:제조번호|lot\.?\s*(?:no\.?)?|batch)\s*[:：.]?\s*((?:[A-Z0-9]\s?){4,14})/gi)) {
+    const first = m[1].trim().split(/\s+/)[0].toUpperCase();
+    if (ok(first)) return first;
+    const v = m[1].replace(/\s/g, '').toUpperCase().slice(0, 12);   // N S 3 6 G 4 8 처럼 띄어 읽힌 경우
+    const t = v.match(/^[A-Z0-9]*?[A-Z][A-Z0-9]*/); if (t && ok(t[0])) return t[0];
+  }
+  let t = text; dates.forEach(d => { t = t.replace(d.raw, ' ') });
+  const toks = (t.toUpperCase().match(/[A-Z0-9]{5,12}/g) || []).filter(ok);
+  return toks.find(x => /^[A-Z]{1,4}\d{2,}[A-Z0-9]*$/.test(x)) || toks[0] || '';
+}
+function parseOcr(text) {
+  // 상자에 글씨로 찍힌 (01)(17)(10)(21) 표준코드
+  const flatT = text.replace(/[ \t]+/g, ' ');
+  const a01 = (flatT.match(/\(\s*0\s*1\s*\)\s*((?:\d ?){14})/) || [])[1];
+  const a17 = (flatT.match(/\(\s*1\s*7\s*\)?\s*(\d{6})(?!\d)/) || [])[1] || ((flatT.match(/\(\s*1\s*7\s*\)[\s\S]{0,40}?\b(\d{6})\b/) || [])[1]);
+  const a10 = (flatT.match(/\(\s*1\s*0\s*\)\s*([A-Z0-9]{3,20})/i) || [])[1];
+  const a21 = (flatT.match(/\(\s*2\s*1\s*\)\s*([A-Z0-9]{3,20})/i) || [])[1];
+  let code = a01 && a01.replace(/\s/g, '').length === 14 ? a01.replace(/\s/g, '') : '';
+  if (!code) code = (flatT.match(/(?<!\d)[01]880\d{10}(?!\d)/) || [])[0] || '';   // (01)이 흐리게 찍혀도 14자리 번호로 찾기
+  const dates = ocrDates(text.replace(/\(\s*\d\s*\d\s*\)\s*\d+/g, ' '));
+  const today = new Date().toISOString().slice(0, 10);
+  let exp = (dates.find(d => d.kind === 'exp') || {}).v || '', mfg = (dates.find(d => d.kind === 'mfg') || {}).v || '';
+  dates.filter(d => !d.kind).forEach(d => { if (d.v > today) { if (!exp) exp = d.v } else if (!mfg) mfg = d.v });
+  if (a17 && yymmdd(a17) && yymmdd(a17) > today) exp = yymmdd(a17);
+  const p = guessProduct(text);
+  return { name: p ? p.n : '', lot: a10 ? a10.toUpperCase() : ocrLot(text.replace(/\(\s*\d\s*\d\s*\)\s*[A-Z0-9]+/gi, ' '), dates), exp, mfg, code, serial: a21 || '' };
+}
+
+/* ---------- 사진에서 바코드 + 글씨 읽기 ---------- */
+let tessP = null, readBusy = false, rbCode = '', rbSerial = '';
+function loadTess(onProg) {
+  if (!tessP) tessP = new Promise((ok, no) => {
+    if (window.Tesseract) return ok();
+    const sc = document.createElement('script');
+    sc.src = 'https://cdn.jsdelivr.net/npm/tesseract.js@5.1.1/dist/tesseract.min.js';
+    sc.onload = ok; sc.onerror = () => no(new Error('load'));
+    document.head.appendChild(sc);
+  }).then(() => Tesseract.createWorker('kor+eng', 1, { logger: m => onProg && onProg(m) }));
+  tessP.catch(() => { tessP = null });
+  return tessP;
+}
+async function toCanvas(src) {   // 사진 파일·카메라 화면 → 알맞은 크기의 그림
+  let w, h, img;
+  if (src instanceof HTMLVideoElement) { img = src; w = src.videoWidth; h = src.videoHeight }
+  else { img = await createImageBitmap(src); w = img.width; h = img.height }
+  const k = Math.min(1, 1800 / Math.max(w, h));
+  const c = document.createElement('canvas'); c.width = Math.round(w * k); c.height = Math.round(h * k);
+  c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
+  return c;
+}
+function ocrCanvas(c) {   // 흑백 + 대비 높이기
+  const o = document.createElement('canvas'); o.width = c.width; o.height = c.height;
+  const x = o.getContext('2d'); x.drawImage(c, 0, 0);
+  const im = x.getImageData(0, 0, o.width, o.height), d = im.data;
+  let lo = 255, hi = 0;
+  for (let i = 0; i < d.length; i += 16) { const v = (d[i] + d[i + 1] + d[i + 2]) / 3; if (v < lo) lo = v; if (v > hi) hi = v }
+  const r = Math.max(30, hi - lo);
+  for (let i = 0; i < d.length; i += 4) { const v = Math.max(0, Math.min(255, ((d[i] + d[i + 1] + d[i + 2]) / 3 - lo) * 255 / r)); d[i] = d[i + 1] = d[i + 2] = v }
+  x.putImageData(im, 0, 0);
+  return o;
+}
+async function findBarcodes(c) {   // 사진 한 장에서 바코드 여러 개 찾기
+  const found = new Set();
+  try { if ('BarcodeDetector' in window) (await new BarcodeDetector().detect(c)).forEach(r => found.add(r.rawValue)) } catch (e) {}
+  if (window.ZXing) {
+    const hints = new Map(); hints.set(ZXing.DecodeHintType.TRY_HARDER, true);
+    const rd = new ZXing.BrowserMultiFormatReader(hints);
+    const tiles = [[0, 0, 1, 1]];   // 전체 + 겹치는 조각들
+    for (const [fx, fy] of [[0, 0], [.5, 0], [0, .5], [.5, .5], [.25, .25]]) tiles.push([fx, fy, .5, .5]);
+    for (const [fx, fy] of [[0, .33], [0, 0], [0, .66]]) tiles.push([fx, fy, 1, .34]);
+    for (const [fx, fy, fw, fh] of tiles) {
+      try {
+        const t = document.createElement('canvas'); const w = c.width * fw, h = c.height * fh, k = Math.min(2, 900 / Math.max(w, h));
+        t.width = Math.round(w * k); t.height = Math.round(h * k);
+        t.getContext('2d').drawImage(c, c.width * fx, c.height * fy, w, h, 0, 0, t.width, t.height);
+        const res = await rd.decodeFromImageUrl(t.toDataURL('image/png'));
+        if (res) found.add(res.getText());
+      } catch (e) {}
+    }
+  }
+  return [...found];
+}
+function rbShow(waitText) {
+  $('readBox').hidden = false; $('rbWait').textContent = waitText || '';
+  $('rbForm').style.display = waitText ? 'none' : 'block';
+}
+async function readImage(src) {
+  if (readBusy) return; readBusy = true;
+  rbShow('사진에서 바코드를 찾는 중…'); $('readBox').scrollIntoView({ behavior: 'smooth', block: 'center' });
+  let c;
+  try { c = await toCanvas(src) } catch (e) { readBusy = false; rbShow(''); $('rbSrc').textContent = '사진을 열지 못했어요'; return }
+  const codes = (await findBarcodes(c)).map(classify).filter(x => x.type !== 'other').sort((a, b) => RANK[b.type] - RANK[a.type]);
+  const main = codes.find(x => x.code) || null, lotBar = codes.find(x => x.type === 'lot');
+  rbCode = main ? main.code : ''; rbSerial = main && main.serial || '';
+  const pk = rbCode ? prodOf(rbCode) : null;
+  const fromBar = { name: pk ? pk.name : '', lot: (main && main.lot) || (lotBar && lotBar.lot) || '', exp: main && main.exp || '', mfg: main && main.mfg || '' };
+  // 글씨 읽기
+  let text = '', ocr = { name: '', lot: '', exp: '', mfg: '' }, ocrFail = false;
+  rbShow('글씨를 읽는 중… (처음 한 번은 글자 사전을 받느라 30초~1분 걸려요)');
+  try {
+    const w = await loadTess(m => { if (m.status && m.progress != null) $('rbWait').textContent = (m.status.includes('recogniz') ? '글씨 읽는 중… ' : '글자 사전 준비 중… ') + Math.round(m.progress * 100) + '%' });
+    const r = await w.recognize(ocrCanvas(c));
+    text = (r && r.data && r.data.text) || '';
+    ocr = parseOcr(text);
+  } catch (e) { ocrFail = true }
+  if (!rbCode && ocr.code) { rbCode = ocr.code; rbSerial = ocr.serial || '' }   // 상자에 글씨로 찍힌 (01) 번호
+  if (rbCode && !fromBar.name) { const pk2 = prodOf(rbCode); if (pk2) fromBar.name = pk2.name }
+  const pick = (k) => fromBar[k] || ocr[k] || '';
+  const srcOf = k => fromBar[k] ? '바코드' : ocr[k] ? '글씨' : '';
+  $('rb_name').value = pick('name'); $('rb_lot').value = pick('lot'); $('rb_exp').value = pick('exp'); $('rb_mfg').value = pick('mfg');
+  const known = rbCode && prodOf(rbCode);
+  const found = [main ? `바코드 ✓${main.type === 'gs1' ? '(네모)' : ''}${known ? '' : ' (처음 보는 바코드)'}` : rbCode ? '바코드 ✗ (글씨로 번호 읽음)' : '바코드 ✗', ocrFail ? '글씨 ✗ (인터넷 확인)' : text.trim() ? '글씨 ✓' : '글씨 ✗'];
+  const from = ['name', 'lot', 'exp'].map(k => srcOf(k) && `${{ name: '제품', lot: '제조번호', exp: '유통기한' }[k]}←${srcOf(k)}`).filter(Boolean);
+  $('rbSrc').textContent = found.join(' · ') + (from.length ? ' | ' + from.join(', ') : '');
+  $('rbText').textContent = text.trim() || '(읽은 글씨 없음)';
+  const guessEa = pk ? pk.ea : (rbCode ? rbCode[0] === '0' : false);
+  $('rbEa').classList.toggle('main', guessEa); $('rbBox').classList.toggle('main', !guessEa);
+  rbShow('');
+  readBusy = false;
+  if (!rbCode && !text.trim()) say('바코드도 글씨도 찾지 못했어요. 가까이에서 흔들리지 않게 다시 찍어 주세요.', 'bad');
+  else say('읽은 결과를 확인하고 "추가"를 눌러 주세요.', 'good');
+}
+function addItem(v, isEa) {   // 읽은 결과로 줄 추가
+  if (v.serial && cart.items.some(x => (x.serials || []).includes(v.code + '/' + v.serial))) { say('이미 찍은 상자예요 (같은 일련번호).', 'bad'); return false }
+  if (v.code && v.name) learn(v.code, v.name, isEa);
+  if (!v.name && !v.code) { say('제품을 골라 주세요.', 'bad'); $('rb_name').focus(); return false }
+  let it = v.name ? findLine(v.name, v.lot)
+                  : cart.items.find(x => x.code === v.code && !x.name);
+  if (!it) {
+    it = { k: uid(), code: v.code || '', ck: isEa ? 'ea' : 'box', name: v.name, lot: v.lot, exp: v.exp, mfg: v.mfg, qty: 0, ea: 0 };
+    if (v.name) fillLot(it);
+    cart.items.unshift(it);
+  } else if (v.lot && it.prefill) { it.lot = v.lot; it.exp = v.exp || it.exp; it.mfg = v.mfg || it.mfg; it.prefill = false }
+  if (isEa) it.ea = (+it.ea || 0) + 1; else it.qty = (+it.qty || 0) + 1;
+  if (v.exp && !it.exp) it.exp = v.exp;
+  if (v.serial) (it.serials = it.serials || []).push(v.code + '/' + v.serial);
+  lastItemK = it.k;
+  saveCart(); renderCart(it.k); beep(true);
+  say(`${it.name || '처음 보는 바코드'} ${isEa ? '낱개' : '박스'} +1 → ${itemQty(it)}`, 'good');
+  return true;
+}
+function rbAdd(isEa) {
+  const v = { code: rbCode, serial: rbSerial, name: $('rb_name').value.trim(), lot: $('rb_lot').value.trim().toUpperCase(), exp: $('rb_exp').value, mfg: $('rb_mfg').value };
+  if (addItem(v, isEa)) { $('readBox').hidden = true; rbCode = '' }
+}
+$('rbBox').onclick = () => rbAdd(false);
+$('rbEa').onclick = () => rbAdd(true);
+$('rbCancel').onclick = () => { $('readBox').hidden = true; rbCode = ''; say('취소했어요.') };
 async function fromPhoto(file) {
   if (!file) return;
-  say('사진에서 바코드를 찾는 중…');
-  const url = URL.createObjectURL(file);
-  try {
-    if ('BarcodeDetector' in window) {
-      const r = await new BarcodeDetector().detect(await createImageBitmap(file));
-      if (r.length) { r.forEach(x => addCode(x.rawValue)); return }
-    }
-    if (window.ZXing) {
-      const hints = new Map(); hints.set(ZXing.DecodeHintType.TRY_HARDER, true);
-      const res = await new ZXing.BrowserMultiFormatReader(hints).decodeFromImageUrl(url);
-      addCode(res.getText()); return;
-    }
-    throw new Error('none');
-  } catch (e) { say('바코드를 찾지 못했어요. 크게, 흔들리지 않게 다시 찍어 주세요.', 'bad') }
-  finally { URL.revokeObjectURL(url); $('photo').value = '' }
+  try { await readImage(file) } finally { $('photo').value = '' }
 }
 
 /* ---------- 자주 쓰는 장소·이름 ---------- */
@@ -1014,6 +1264,7 @@ showBy(); $('s_url').value = settings.url || '';
 /* ---------- 연결 ---------- */
 $('btnScan').onclick = () => stream || zreader ? stopScan() : startScan();
 $('btnStop').onclick = stopScan;
+$('btnSnap').onclick = () => { const v = $('video'); if (v.videoWidth) readImage(v) };
 $('btnPhoto').onclick = () => $('photo').click();
 $('photo').onchange = e => fromPhoto(e.target.files[0]);
 $('btnManual').onclick = () => { addCode($('manualCode').value); $('manualCode').value = '' };
