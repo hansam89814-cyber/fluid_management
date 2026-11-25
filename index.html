@@ -61,6 +61,10 @@ textarea{min-height:56px;resize:vertical}
 .qrow .qty button{width:40px;min-height:42px}
 .qrow .qty input{width:100%;flex:1}
 .qrow .qty{gap:3px}
+.kind{margin-top:8px;display:flex;flex-wrap:wrap;gap:6px}
+.kind .ql{width:100%;font-size:13px;color:var(--mute)}
+.kind button{flex:1 1 130px;min-height:42px;font-size:15px;padding:4px 8px;border-radius:10px}
+.kind button.on{background:var(--blue2);color:#fff;border-color:var(--blue2);font-weight:700}
 .item .tot{margin-top:6px;font-size:14px;color:var(--ink)}
 .item .tot b{color:var(--blue2)}
 .item summary{font-size:14px;color:var(--blue2);cursor:pointer;min-height:32px;display:flex;align-items:center}
@@ -484,7 +488,24 @@ let settings = load(SKEY, { me: '', url: '' });
 let queue = load(QKEY, { remove: [], products: {} });   // 아직 시트로 못 보낸 삭제·바코드 이름
 let lastSync = null, syncErr = '', syncing = false;
 function toast(t) { const el = $('toast'); el.textContent = t; el.style.display = 'block'; clearTimeout(toast.t); toast.t = setTimeout(() => el.style.display = 'none', 2500) }
-function learn(code, name) { if (code && name && products[code] !== name) { products[code] = name; queue.products[code] = name; store(PKEY, products); store(QKEY, queue) } }
+const EA_TAG = ' (낱개)';   // 바코드 탭에 "제품명 (낱개)"로 저장 = 병 하나에 붙은 바코드
+const stripTag = v => String(v || '').endsWith(EA_TAG) ? String(v).slice(0, -EA_TAG.length) : String(v || '');
+function prodOf(code) {
+  const v = products[code] || products[String(code).replace(/^0+/, '')];
+  return v ? { name: stripTag(v), ea: String(v).endsWith(EA_TAG) } : null;
+}
+function learn(code, name, ea) {
+  if (!code || !name) return;
+  const v = name + (ea ? EA_TAG : '');
+  if (products[code] !== v) { products[code] = v; queue.products[code] = v; store(PKEY, products); store(QKEY, queue) }
+}
+function mergeSame(it) {   // 같은 제품·같은 제조번호 줄이 이미 있으면 합치기
+  const o = cart.items.find(x => x !== it && x.name && x.name === it.name && (x.lot || '') === (it.lot || ''));
+  if (!o) return it;
+  o.qty = (+o.qty || 0) + (+it.qty || 0); o.ea = (+o.ea || 0) + (+it.ea || 0);
+  cart.items = cart.items.filter(x => x !== it);
+  return o;
+}
 const saveCart = () => { cart.place = $('f_place').value; cart.req = $('f_req').value; cart.who = $('f_who').value; cart.memo = $('f_memo').value; store(CKEY, cart) };
 
 /* ---------- GS1 바코드 해석 ---------- */
@@ -533,18 +554,22 @@ function addCode(raw) {
   const g = parseGS1(raw);
   const code = g ? (g['01'] || g['02'] || raw) : raw;
   const lot = g && g['10'] || '', exp = g && g['17'] ? yymmdd(g['17']) : '', mfg = g && g['11'] ? yymmdd(g['11']) : '';
-  let it = cart.items.find(x => x.code === code && (!lot || (x.lot || '') === lot));
-  if (it) it.qty += 1;
-  else {
-    const name = products[code] || products[code.replace(/^0+/, '')] || '';
-    it = { k: uid(), code, name, lot, exp, mfg, qty: 1, ea: 0 };
-    fillLot(it);
-    cart.items.unshift(it);
+  const pk = prodOf(code);
+  let it, isEa;
+  if (pk) {
+    isEa = pk.ea;
+    it = cart.items.find(x => x.name === pk.name && (!lot || (x.lot || '') === lot));
+    if (!it) { it = { k: uid(), code, ck: isEa ? 'ea' : 'box', name: pk.name, lot, exp, mfg, qty: 0, ea: 0 }; fillLot(it); cart.items.unshift(it) }
+  } else {
+    it = cart.items.find(x => x.code === code && !x.name);
+    if (!it) { it = { k: uid(), code, ck: 'box', name: '', lot, exp, mfg, qty: 0, ea: 0 }; cart.items.unshift(it) }
+    isEa = it.ck === 'ea';
   }
+  if (isEa) it.ea = (+it.ea || 0) + 1; else it.qty = (+it.qty || 0) + 1;
   saveCart(); renderCart(it.k);
   const label = it.name || '처음 보는 바코드';
-  $('live').textContent = `${label} +1박스 → ${itemQty(it)}  |  합계 ${qtyText(cartBoxes(), cartSingles())}`;
-  say(it.name ? `${it.name} ${itemQty(it)}` : '처음 보는 바코드예요. 아래 주황색 칸에서 제품을 골라 주세요.', it.name ? 'good' : 'bad');
+  $('live').textContent = `${label} ${isEa ? '낱개' : '박스'} +1 → ${itemQty(it)}  |  합계 ${qtyText(cartBoxes(), cartSingles())}`;
+  say(it.name ? `${it.name} ${isEa ? '낱개' : '박스'} +1 → ${itemQty(it)}` : '처음 보는 바코드예요. 주황색 칸에서 박스/낱개 바코드와 제품을 골라 주세요.', it.name ? 'good' : 'bad');
   beep(!!it.name);
 }
 function addByName(name) {
@@ -593,14 +618,17 @@ function renderCart_(flashK) {
   const n = cart.items.length, b = cartBoxes(), sg = cartSingles();
   $('cartTotal').textContent = n ? `${n}품목 · ${qtyText(b, sg)}` : '';
   $('cart').innerHTML = n ? cart.items.map(it => {
+    if (it.code && !it.ck) { const pk = prodOf(it.code); it.ck = pk && pk.ea ? 'ea' : 'box' }
     const p = findProd(it.name);
     const known = !!it.name;
     return `<div class="item${known ? '' : ' new'}${it.k === flashK ? ' flash' : ''}" data-k="${esc(it.k)}">
       <div class="r1">
         <div class="nm">${known ? esc(it.name) + expTag(it.exp) : '<input data-f="name" list="nameList" placeholder="제품 이름 고르기">'}
-          <div class="sub">${p ? esc(p.m) + ' · 포장단위 1박스 = ' + p.u + '개' : '목록에 없는 제품 (포장단위 모름)'}</div>
+          <div class="sub">${p ? esc(p.m) + ' · 포장단위 1박스 = ' + p.u + '개' : known ? '목록에 없는 제품 (포장단위 모름)' : '↑ 제품 이름을 골라 주세요'}</div>
         </div>
       </div>
+      ${!known && it.code ? `<div class="kind"><div class="ql">이 바코드는 어디에 붙어 있나요?</div>
+        <button type="button" data-a="kind" data-v="box" class="${it.ck !== 'ea' ? 'on' : ''}">📦 박스 바코드</button><button type="button" data-a="kind" data-v="ea" class="${it.ck === 'ea' ? 'on' : ''}">🧴 낱개(병) 바코드</button></div>` : ''}
       <div class="qrow">
         <div><div class="ql">박스</div><div class="qty"><button type="button" data-a="minus" data-t="qty" aria-label="박스 빼기">−</button><input data-f="qty" type="number" inputmode="numeric" min="0" value="${esc(it.qty)}" aria-label="박스 수"><button type="button" data-a="plus" data-t="qty" aria-label="박스 더하기">+</button></div></div>
         <div><div class="ql">낱개</div><div class="qty"><button type="button" data-a="minus" data-t="ea" aria-label="낱개 빼기">−</button><input data-f="ea" type="number" inputmode="numeric" min="0" value="${esc(it.ea)}" aria-label="낱개 수"><button type="button" data-a="plus" data-t="ea" aria-label="낱개 더하기">+</button></div></div>
@@ -612,12 +640,12 @@ function renderCart_(flashK) {
           <div><label>제조일자</label><input data-f="mfg" type="date" value="${esc(it.mfg)}"></div>
           <div><label>유통기한</label><input data-f="exp" type="date" value="${esc(it.exp)}"></div>
         </div>
+        ${known && it.code ? `<div class="kind" style="margin-top:8px"><div class="ql">바코드 <span class="code">${esc(it.code)}</span> 는</div><button type="button" data-a="kind" data-v="box" class="${it.ck !== 'ea' ? 'on' : ''}">📦 박스 바코드</button><button type="button" data-a="kind" data-v="ea" class="${it.ck === 'ea' ? 'on' : ''}">🧴 낱개(병) 바코드</button></div>` : ''}
         ${known ? '<button type="button" class="small" data-a="rename" style="margin-top:6px">제품 이름 바꾸기</button>' : ''}
         <button type="button" class="small" data-a="del" style="margin-top:6px">이 줄 삭제</button>
-        ${it.code ? `<div class="hint">바코드 <span class="code">${esc(it.code)}</span></div>` : ''}
       </details>
     </div>`;
-  }).join('') : '<div class="empty">찍은 상자가 여기에 쌓여요</div>';
+  }).join('') : '<div class="empty">찍은 박스·병이 여기에 쌓여요</div>';
   const unknown = cart.items.filter(x => !x.name).length, nolot = cart.items.filter(x => !x.lot || !x.exp).length;
   const warn = [unknown ? `제품 미선택 ${unknown}줄` : '', nolot ? `제조번호·유효기간 빈 줄 ${nolot}` : ''].filter(Boolean).join(' · ');
   $('barSum').innerHTML = n ? `<b>${qtyText(b, sg)}</b> · ${n}품목${warn ? `<br><span style="color:var(--red);font-size:13px">${warn}</span>` : ''}` : '아직 찍은 상자가 없어요';
@@ -636,6 +664,14 @@ $('cart').addEventListener('click', e => {
   }
   if (a === 'del') return ask(`${it.name || '이 줄'}을(를) 목록에서 뺄까요?`, () => { cart.items = cart.items.filter(x => x !== it); saveCart(); renderCart() });
   if (a === 'rename') { it.name = ''; }
+  if (a === 'kind') {
+    const toEa = btn.dataset.v === 'ea';
+    if ((it.ck === 'ea') !== toEa) {   // 잘못 고른 경우: 지금까지 센 개수를 옮기기
+      if (toEa) { it.ea = (+it.ea || 0) + (+it.qty || 0); it.qty = 0 } else { it.qty = (+it.qty || 0) + (+it.ea || 0); it.ea = 0 }
+    }
+    it.ck = toEa ? 'ea' : 'box';
+    if (it.name && it.code) learn(it.code, it.name, toEa);
+  }
   saveCart(); renderCart();
 });
 $('cart').addEventListener('change', e => {
@@ -643,8 +679,8 @@ $('cart').addEventListener('change', e => {
   const it = cart.items.find(x => x.k === e.target.closest('.item').dataset.k); if (!it) return;
   if (f === 'qty' || f === 'ea') it[f] = Math.max(0, Math.round(+e.target.value || 0));
   else it[f] = e.target.value.trim();
-  if (f === 'name' && it.name && it.code) learn(it.code, it.name);
-  if (f === 'name') fillLot(it);
+  if (f === 'name' && it.name && it.code) learn(it.code, it.name, it.ck === 'ea');
+  if (f === 'name' && it.name) { fillLot(it); mergeSame(it) }
   if (f === 'lot' || f === 'exp' || f === 'mfg') it.prefill = false;
   saveCart(); renderCart();
 });
@@ -721,7 +757,7 @@ function renderChips() {
   [['place', 'placeChips', 'f_place'], ['req', 'reqChips', 'f_req'], ['who', 'whoChips', 'f_who']].forEach(([f, box, inp]) => {
     $(box).innerHTML = topValues(f, 10).map(v => `<button type="button" data-inp="${inp}" data-v="${esc(v)}">${esc(v)}</button>`).join('');
   });
-  const names = [...new Set([...CATALOG.map(p => p.n), ...Object.values(products)])];
+  const names = [...new Set([...CATALOG.map(p => p.n), ...Object.values(products).map(stripTag)])];
   $('nameList').innerHTML = names.map(v => { const p = findProd(v); return `<option value="${esc(v)}">${p ? esc(p.m) : ''}</option>` }).join('');
 }
 document.addEventListener('click', e => { const b = e.target.closest('.chips button'); if (b) { $(b.dataset.inp).value = b.dataset.v; saveCart() } });
