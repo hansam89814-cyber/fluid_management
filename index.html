@@ -108,9 +108,26 @@ input[type=date]{-webkit-appearance:none;appearance:none;min-height:42px;backgro
 .byrow label{margin:0;font-size:16px;font-weight:700;color:var(--ink);flex:none}
 .byrow select{flex:1;font-weight:700}
 .byrow.need{border-color:var(--red);background:#fff5f4}
+.tabs{display:flex;gap:6px;margin-bottom:8px;overflow-x:auto}
+.tabs button{flex:none;min-height:40px;font-size:15px;padding:4px 14px;border-radius:20px}
+.tabs button.on{background:var(--blue);color:#fff;border-color:var(--blue);font-weight:700}
+.opts .grp{position:sticky;top:-4px;background:#eef3f7;color:var(--blue);font-size:13px;font-weight:700;padding:6px 12px;margin:2px -4px;z-index:1}
+.opts button small{color:var(--mute);font-size:13px;margin-left:6px}
+.pdetail{margin-top:10px;border:1px solid var(--line);border-radius:12px;padding:12px;background:#fafcfe}
+.pinfo{font-size:14px;color:var(--mute);margin-bottom:8px}
+.pinfo b{color:var(--ink);font-size:17px;display:block}
+.lots{display:flex;flex-wrap:wrap;gap:6px;margin:4px 0 8px}
+.lots button{min-height:44px;font-size:15px;padding:4px 12px;border-radius:10px;font-family:ui-monospace,Menlo,monospace}
+.lots button.on{background:var(--blue2);color:#fff;border-color:var(--blue2);font-weight:700}
+.lots .none{font-size:13px;color:var(--mute)}
+.newlot{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
+.newlot label{margin:0 0 2px;font-size:12px}
+.newlot input{font-size:16px;padding:9px 10px;min-width:0}
+.scanopt{margin-top:12px;border-top:1px dashed var(--line);padding-top:8px}
+.scanopt>summary{cursor:pointer;color:var(--blue2);font-size:15px;font-weight:500;min-height:40px;display:flex;align-items:center}
 .combo{position:relative}
 .combo input{padding-right:48px}
-.combo #placeClear{position:absolute;right:4px;top:4px;min-height:40px;width:40px;padding:0;border:0;background:none;color:var(--mute);font-size:18px}
+.combo #placeClear,.combo #pClear{position:absolute;right:4px;top:4px;min-height:40px;width:40px;padding:0;border:0;background:none;color:var(--mute);font-size:18px}
 .opts{position:absolute;left:0;right:0;top:calc(100% + 4px);background:#fff;border:1px solid var(--line);border-radius:12px;box-shadow:0 8px 24px rgba(0,0,0,.14);max-height:290px;overflow-y:auto;z-index:6;padding:4px}
 .opts button{display:block;width:100%;text-align:left;border:0;border-radius:8px;min-height:46px;font-size:17px;font-weight:400;padding:8px 12px}
 .opts button:hover,.opts button.on{background:var(--sky)}
@@ -132,7 +149,7 @@ input[type=date]{-webkit-appearance:none;appearance:none;min-height:42px;backgro
 <body>
 <header>
   <h1>수액 배달 기록</h1>
-  <p>장소 고르고 → 상자 연속으로 찍고 → 신청인·수령인 넣고 → 저장</p>
+  <p>장소 → 제품·제조번호·개수 → 신청인·수령인 → 저장</p>
 </header>
 <main>
   <section class="card byrow">
@@ -152,14 +169,37 @@ input[type=date]{-webkit-appearance:none;appearance:none;min-height:42px;backgro
   </section>
 
   <section class="card">
-    <h2><span><span class="step">2</span>상자 찍기</span><span class="total" id="cartTotal"></span></h2>
+    <h2><span><span class="step">2</span>제품 넣기</span><span class="total" id="cartTotal"></span></h2>
+    <div class="tabs" id="mkTabs"><button type="button" data-m="" class="on">전체</button><button type="button" data-m="중외">중외</button><button type="button" data-m="HK이노엔">HK이노엔</button><button type="button" data-m="대한">대한</button></div>
+    <div class="combo">
+      <input id="p_name" autocomplete="off" placeholder="제품 고르기 · 검색 (예: 엔에스, 1000, ㅍㄹ)">
+      <button type="button" id="pClear" aria-label="지우기">✕</button>
+      <div class="opts" id="pOpts" hidden></div>
+    </div>
+    <div id="pDetail" class="pdetail" hidden>
+      <div class="pinfo" id="pInfo"></div>
+      <div class="ql">제조번호 (누르면 유효기간까지 들어가요)</div>
+      <div class="lots" id="pLots"></div>
+      <div class="newlot">
+        <div><label for="p_lot">제조번호</label><input id="p_lot" class="code" autocomplete="off" placeholder="새 제조번호"></div>
+        <div><label for="p_exp">유효기간</label><input id="p_exp" type="date"></div>
+      </div>
+      <div class="qrow">
+        <div><div class="ql">박스</div><div class="qty"><button type="button" data-p="minus" data-t="p_box" aria-label="박스 빼기">−</button><input id="p_box" type="number" inputmode="numeric" min="0" value="1" aria-label="박스 수"><button type="button" data-p="plus" data-t="p_box" aria-label="박스 더하기">+</button></div></div>
+        <div><div class="ql">낱개</div><div class="qty"><button type="button" data-p="minus" data-t="p_ea" aria-label="낱개 빼기">−</button><input id="p_ea" type="number" inputmode="numeric" min="0" value="0" aria-label="낱개 수"><button type="button" data-p="plus" data-t="p_ea" aria-label="낱개 더하기">+</button></div></div>
+      </div>
+      <div class="tot" id="pTot"></div>
+      <button type="button" class="main" id="pAdd" style="width:100%;margin-top:10px">⬇ 목록에 넣기</button>
+    </div>
+    <p id="msg">제품을 고르고 → 제조번호 버튼 → 박스·낱개 수 → <b>목록에 넣기</b></p>
+    <details class="scanopt"><summary>📷 바코드로 찍기 (선택)</summary>
     <div class="scanbtns">
       <button class="main" id="btnScan">📷 연속 찍기</button>
       <button id="btnPhoto">사진 읽기</button>
     </div>
     <input type="file" id="photo" accept="image/*" capture="environment" hidden>
     <div id="cam"><video id="video" playsinline muted></video><div class="aim"></div><button class="close small" id="btnStop">닫기</button><button class="snap small" id="btnSnap">📝 글씨 읽기</button><div class="live" id="live">상자 바코드를 차례로 비춰 주세요</div></div>
-    <p id="msg">상자의 <b>작은 네모 바코드</b>를 찍으면 제조번호·유효기간까지 한 번에 들어가고, 같은 상자를 두 번 세지 않아요.</p>
+    <p class="hint">상자의 <b>작은 네모 바코드</b>가 읽히면 제조번호·유효기간까지 한 번에 들어가요.</p>
     <div class="readbox" id="readBox" hidden>
       <div class="rb-h"><b>읽은 결과</b> <span id="rbSrc"></span></div>
       <div id="rbWait" class="hint"></div>
@@ -178,7 +218,7 @@ input[type=date]{-webkit-appearance:none;appearance:none;min-height:42px;backgro
       </div>
     </div>
     <div class="manual"><input id="manualCode" class="code" inputmode="numeric" placeholder="바코드 번호 직접 입력"><button class="small" id="btnManual">추가</button></div>
-    <div class="manual"><input id="manualName" list="nameList" placeholder="바코드 없이 제품 이름으로 추가"><button class="small" id="btnManualName">추가</button></div>
+    </details>
     <datalist id="nameList"></datalist>
     <div id="cart"></div>
   </section>
@@ -241,7 +281,7 @@ input[type=date]{-webkit-appearance:none;appearance:none;min-height:42px;backgro
 </main>
 
 <div class="bar">
-  <div class="sum" id="barSum">아직 찍은 상자가 없어요</div>
+  <div class="sum" id="barSum">아직 넣은 제품이 없어요</div>
   <button class="save" id="btnSave" disabled>저장</button>
 </div>
 
@@ -716,10 +756,10 @@ function renderCart_(flashK) {
         <button type="button" class="small" data-a="del" style="margin-top:6px">이 줄 삭제</button>
       </details>
     </div>`;
-  }).join('') : '<div class="empty">찍은 박스·병이 여기에 쌓여요</div>';
+  }).join('') : '<div class="empty">넣은 제품이 여기에 쌓여요</div>';
   const unknown = cart.items.filter(x => !x.name).length, nolot = cart.items.filter(x => !x.lot || !x.exp).length;
   const warn = [unknown ? `제품 미선택 ${unknown}줄` : '', nolot ? `제조번호·유효기간 빈 줄 ${nolot}` : ''].filter(Boolean).join(' · ');
-  $('barSum').innerHTML = n ? `<b>${qtyText(b, sg)}</b> · ${n}품목${warn ? `<br><span style="color:var(--red);font-size:13px">${warn}</span>` : ''}` : '아직 찍은 상자가 없어요';
+  $('barSum').innerHTML = n ? `<b>${qtyText(b, sg)}</b> · ${n}품목${warn ? `<br><span style="color:var(--red);font-size:13px">${warn}</span>` : ''}` : '아직 넣은 제품이 없어요';
   $('btnSave').disabled = !n;
 }
 $('cart').addEventListener('click', e => {
@@ -1208,6 +1248,103 @@ $('list').addEventListener('click', e => {
   });
 });
 
+/* ---------- 제품 고르기 (제약사별 드롭다운 + 검색) ---------- */
+let pMaker = '', pSel = null, pIdx = -1;
+const MAKERS = ['중외', 'HK이노엔', '대한'];
+function recentProducts(n) {
+  const seen = [];
+  for (const d of deliveries) for (const x of d.items) if (x.name && !seen.includes(x.name) && findProd(x.name)) { seen.push(x.name); if (seen.length >= n) return seen }
+  return seen;
+}
+function showPOpts() {
+  const q = $('p_name').value.trim();
+  const match = p => (!pMaker || p.m === pMaker) && placeMatch(p.n.replace(/^(중외|대한)\s*/, ''), q) || (q && placeMatch(p.n, q) && (!pMaker || p.m === pMaker));
+  let html = '';
+  if (!q && !pMaker) {
+    const rec = recentProducts(6);
+    if (rec.length) html += '<div class="grp">최근 나간 제품</div>' + rec.map(n => `<button type="button" data-v="${esc(n)}">${esc(n)}</button>`).join('');
+  }
+  MAKERS.forEach(m => {
+    const list = CATALOG.filter(p => p.m === m && match(p));
+    if (list.length) html += `<div class="grp">${esc(m)} (${list.length})</div>` + list.map(p => `<button type="button" data-v="${esc(p.n)}">${esc(p.n)}<small>1박스 ${p.u}개</small></button>`).join('');
+  });
+  $('pOpts').innerHTML = html || '<div class="none">목록에 없어요. 이름을 다르게 쳐 보세요.</div>';
+  $('pOpts').hidden = false; pIdx = -1;
+}
+function lotsFor(name) {   // 이 제품의 제조번호 (최근 쓴 순서)
+  const m = new Map();
+  cart.items.forEach(x => { if (x.name === name && x.lot && !m.has(x.lot)) m.set(x.lot, x.exp || '') });
+  for (const d of deliveries) for (const x of d.items) if (x.name === name && x.lot && !m.has(x.lot)) m.set(x.lot, x.exp || '');
+  return [...m.entries()].slice(0, 6).map(([lot, exp]) => ({ lot, exp }));
+}
+const shortD = d => d ? d.slice(2).replace(/-/g, '.') : '';
+function pickProduct(name) {
+  pSel = findProd(name) || { m: '', n: name, u: 0 };
+  $('p_name').value = pSel.n; $('pOpts').hidden = true; $('p_name').blur();
+  $('pInfo').innerHTML = `<b>${esc(pSel.n)}</b>${pSel.m ? esc(pSel.m) + ' · 포장단위 1박스 = ' + pSel.u + '개' : '포장단위 모름'}`;
+  const lots = lotsFor(pSel.n);
+  $('pLots').innerHTML = lots.length ? lots.map((l, i) => `<button type="button" data-lot="${esc(l.lot)}" data-exp="${esc(l.exp)}" class="${i === 0 ? 'on' : ''}">${esc(l.lot)}${l.exp ? ' · ' + esc(shortD(l.exp)) : ''}${expState(l.exp) === 'exp' ? ' ⚠' : ''}</button>`).join('')
+    : '<span class="none">아직 등록된 제조번호가 없어요. 아래에 한 번만 적어 주세요.</span>';
+  $('p_lot').value = lots[0] ? lots[0].lot : ''; $('p_exp').value = lots[0] ? lots[0].exp : '';
+  $('p_box').value = 1; $('p_ea').value = 0;
+  $('pDetail').hidden = false; pTot();
+  if (!lots.length) setTimeout(() => $('p_lot').focus(), 50);
+}
+function pTot() {
+  if (!pSel) return;
+  const b = Math.max(0, +$('p_box').value || 0), e = Math.max(0, +$('p_ea').value || 0);
+  $('pTot').innerHTML = pSel.u ? `${b ? b + '박스 × ' + pSel.u + '개' : ''}${b && e ? ' + ' : ''}${e ? '낱개 ' + e + '개' : ''}${b || e ? ' = 총 <b>' + (b * pSel.u + e) + '개</b>' : '개수를 넣어 주세요'}` : esc(qtyText(b, e));
+}
+function pReset() { pSel = null; $('p_name').value = ''; $('pDetail').hidden = true; $('pOpts').hidden = true }
+$('p_name').addEventListener('focus', showPOpts);
+$('p_name').addEventListener('click', showPOpts);
+$('p_name').addEventListener('input', () => { pSel = null; $('pDetail').hidden = true; showPOpts() });
+$('p_name').addEventListener('keydown', e => {
+  const bs = [...$('pOpts').querySelectorAll('button')];
+  if (e.key === 'ArrowDown' || e.key === 'ArrowUp') { e.preventDefault(); if (!bs.length) return; pIdx = (pIdx + (e.key === 'ArrowDown' ? 1 : -1) + bs.length) % bs.length; bs.forEach((b, i) => b.classList.toggle('on', i === pIdx)); bs[pIdx].scrollIntoView({ block: 'nearest' }) }
+  if (e.key === 'Enter') { e.preventDefault(); const b = bs[pIdx >= 0 ? pIdx : 0]; if (b) pickProduct(b.dataset.v) }
+  if (e.key === 'Escape') $('pOpts').hidden = true;
+});
+$('p_name').addEventListener('blur', () => setTimeout(() => { if (document.activeElement !== $('p_name')) $('pOpts').hidden = true }, 150));
+$('pOpts').addEventListener('pointerdown', e => e.preventDefault());
+$('pOpts').addEventListener('click', e => { const b = e.target.closest('button[data-v]'); if (b) pickProduct(b.dataset.v) });
+$('pClear').onclick = () => { pReset(); $('p_name').focus(); showPOpts() };
+$('mkTabs').addEventListener('click', e => {
+  const b = e.target.closest('button[data-m]'); if (!b) return;
+  pMaker = b.dataset.m; $('mkTabs').querySelectorAll('button').forEach(x => x.classList.toggle('on', x === b));
+  pReset(); $('p_name').focus(); showPOpts();
+});
+$('pLots').addEventListener('click', e => {
+  const b = e.target.closest('button[data-lot]'); if (!b) return;
+  $('pLots').querySelectorAll('button').forEach(x => x.classList.toggle('on', x === b));
+  $('p_lot').value = b.dataset.lot; $('p_exp').value = b.dataset.exp;
+});
+$('p_lot').addEventListener('input', () => {
+  const v = $('p_lot').value.trim().toUpperCase();
+  let hit = null;
+  $('pLots').querySelectorAll('button').forEach(x => { const on = x.dataset.lot === v; x.classList.toggle('on', on); if (on) hit = x });
+  if (hit && hit.dataset.exp) $('p_exp').value = hit.dataset.exp;
+});
+$('pDetail').addEventListener('click', e => {
+  const b = e.target.closest('button[data-p]'); if (!b) return;
+  const inp = $(b.dataset.t); inp.value = Math.max(0, (+inp.value || 0) + (b.dataset.p === 'plus' ? 1 : -1)); pTot();
+});
+['p_box', 'p_ea'].forEach(id => $(id).addEventListener('input', pTot));
+$('pAdd').onclick = () => {
+  if (!pSel) { $('p_name').focus(); return say('제품을 먼저 골라 주세요.', 'bad') }
+  const b = Math.max(0, Math.round(+$('p_box').value || 0)), e = Math.max(0, Math.round(+$('p_ea').value || 0));
+  if (!b && !e) return say('박스나 낱개 수를 넣어 주세요.', 'bad');
+  const lot = $('p_lot').value.trim().toUpperCase(), exp = $('p_exp').value;
+  if (exp && expState(exp) === 'exp') say('⚠ 유효기간이 지난 제조번호예요. 확인해 주세요.', 'bad');
+  let it = cart.items.find(x => x.name === pSel.n && (x.lot || '') === lot);
+  if (it) { it.qty = (+it.qty || 0) + b; it.ea = (+it.ea || 0) + e; if (exp) it.exp = exp }
+  else { it = { k: uid(), code: '', name: pSel.n, lot, exp, mfg: '', qty: b, ea: e }; cart.items.unshift(it) }
+  lastItemK = it.k;
+  saveCart(); renderCart(it.k);
+  if (!(exp && expState(exp) === 'exp')) say(`${pSel.n}${lot ? ' (' + lot + ')' : ''} ${qtyText(b, e)} 넣었어요. 다음 제품을 골라 주세요.`, 'good');
+  pReset();
+};
+
 /* ---------- 배달 장소 고르기 ---------- */
 let optIdx = -1;
 function showOpts() {
@@ -1230,7 +1367,7 @@ $('f_place').addEventListener('keydown', e => {
 });
 $('placeOpts').addEventListener('pointerdown', e => e.preventDefault());
 $('placeOpts').addEventListener('click', e => { const b = e.target.closest('button[data-v]'); if (b) pickPlace(b.dataset.v) });
-$('f_place').addEventListener('blur', () => setTimeout(() => { $('placeOpts').hidden = true }, 150));
+$('f_place').addEventListener('blur', () => setTimeout(() => { if (document.activeElement !== $('f_place')) $('placeOpts').hidden = true }, 150));
 $('placeClear').onclick = () => { $('f_place').value = ''; saveCart(); $('f_place').focus(); showOpts() };
 $('btnSame').onclick = () => { $('f_who').value = $('f_req').value; saveCart() };
 
@@ -1380,7 +1517,6 @@ $('btnPhoto').onclick = () => $('photo').click();
 $('photo').onchange = e => fromPhoto(e.target.files[0]);
 $('btnManual').onclick = () => { addCode($('manualCode').value); $('manualCode').value = '' };
 $('manualCode').addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); $('btnManual').click() } });
-$('btnManualName').onclick = () => { addByName($('manualName').value); $('manualName').value = '' };
 ['f_place', 'f_req', 'f_who', 'f_memo'].forEach(id => $(id).addEventListener('change', saveCart));
 $('q').addEventListener('input', renderList);
 $('range').addEventListener('change', renderList);
